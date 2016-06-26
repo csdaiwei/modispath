@@ -46,6 +46,8 @@ class MainWindow(object):
         self.imtk = None
         self.zoom_text = None
         self.canvas = None
+        self.e1, self.e2, self.e3, self.e4 = None, None, None, None
+        self.e5, self.e6, self.e7, self.e8 = None, None, None, None
         self.mouse_state = tk.IntVar()      # self.mouse_state.get() ==0    # drag mouse to move image
                                             # self.mouse_state.get() ==1    # click to set starting point
                                             # self.mouse_state.get() ==2    # click to set ending point
@@ -55,7 +57,7 @@ class MainWindow(object):
         # first of all, 3 main frames
         frame_left_top = tk.Frame(master, width=850, height=850)
         frame_left_bottom = tk.Frame(master, width=850, height=60)
-        frame_right = tk.Frame(master, width=200, height=910, bg='blue')
+        frame_right = tk.Frame(master, width=200, height=910)
         frame_left_top.grid(row=0, column=0, padx=2, pady=2)
         frame_left_bottom.grid(row=1, column=0)
         frame_right.grid(row=0, column=1, rowspan=2, padx=1, pady=2)
@@ -81,7 +83,7 @@ class MainWindow(object):
         canvas.pack()
 
 
-        #building frame_left_bottom
+        # building frame_left_bottom
         b0 = tk.Radiobutton(frame_left_bottom, text="默认", variable=self.mouse_state,value=0)
         b1 = tk.Radiobutton(frame_left_bottom, text="设置起点", variable=self.mouse_state ,value=1)
         b2 = tk.Radiobutton(frame_left_bottom, text="设置终点", variable=self.mouse_state ,value=2)
@@ -106,6 +108,61 @@ class MainWindow(object):
         scale_label.grid(row=0, column=7)
 
 
+        # building frame_right
+        l1 = tk.Label(frame_right, text='起点经度')
+        l2 = tk.Label(frame_right, text='起点纬度')
+        l3 = tk.Label(frame_right, text='终点经度')
+        l4 = tk.Label(frame_right, text='终点纬度')
+        l5 = tk.Label(frame_right, text='最小间距')
+        l6 = tk.Label(frame_right, text='优化目标')
+        l1.grid(row=0, column=0, pady=20)
+        l2.grid(row=1, column=0, pady=20)
+        l3.grid(row=2, column=0, pady=20)
+        l4.grid(row=3, column=0, pady=20)
+        l5.grid(row=4, column=0, pady=20)
+        l6.grid(row=5, column=0, pady=20)
+        
+
+        self.e1 = tk.Entry(frame_right, width=10)
+        self.e2 = tk.Entry(frame_right, width=10)
+        self.e3 = tk.Entry(frame_right, width=10)
+        self.e4 = tk.Entry(frame_right, width=10)
+        self.e5 = tk.Entry(frame_right, width=10)
+        self.e1.grid(row=0, column=1)
+        self.e2.grid(row=1, column=1)
+        self.e3.grid(row=2, column=1)
+        self.e4.grid(row=3, column=1)
+        self.e5.grid(row=4, column=1)
+        
+
+        option_list = ['时间', '油耗', '路程']
+        v = tk.StringVar(frame_right, option_list[0])
+        self.e6 = tk.OptionMenu(frame_right, v, *option_list)
+        self.e6.config(width=6)
+        self.e6.grid(row=5, column=1)
+
+        b7 = tk.Button(frame_right, command=self.__callback_b7_genpath, text='生成路径')
+        b7.grid(row=6, column=0, columnspan=2, pady=20)
+
+        blank = tk.Label(frame_right, height=5)
+        blank.grid(row=7)
+
+        l7 = tk.Label(frame_right, text='查询经度')
+        l8 = tk.Label(frame_right, text='查询纬度')
+        l7.grid(row=8, column=0, pady=20)
+        l8.grid(row=9, column=0, pady=20)
+        self.e7 = tk.Entry(frame_right, width=10)
+        self.e8 = tk.Entry(frame_right, width=10)
+        self.e7.grid(row=8, column=1)
+        self.e8.grid(row=9, column=1)
+
+        
+        b8 = tk.Button(frame_right, command=self.__callback_b8_querycoordinates, text='查询')
+        b9 = tk.Button(frame_right, command=self.__callback_b9_reset, text='复位')
+        b8.grid(row=10, column=0, columnspan=2, pady=20)
+        b9.grid(row=11, column=0, columnspan=2, pady=20)
+
+
 
     #######################################
     ### public member functions ###########
@@ -118,6 +175,8 @@ class MainWindow(object):
     #######################################
 
     # button callbacks (with no event paratemer)
+    def __callback(self):
+        pass
 
     def __callback_b3_change_modis(self):
         pass
@@ -144,6 +203,15 @@ class MainWindow(object):
         
         new_factor = self.zoom_level[index + 1]
         self.__rescale(new_factor)
+
+    def __callback_b7_genpath(self):
+        pass
+
+    def __callback_b8_querycoordinates(self):
+        pass
+
+    def __callback_b9_reset(self):
+        pass
 
 
     # event callbacks
