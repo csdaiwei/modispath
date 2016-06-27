@@ -1,6 +1,7 @@
 *.pyc
 *.ini
 
-/.idea
+.idea/*
+data/*
 
 .DS_Store

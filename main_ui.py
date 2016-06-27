@@ -1,18 +1,21 @@
 # encoding:utf-8
 
 import pdb
+
+import tkMessageBox
 import Tkinter as tk
 from Tkinter import *
-import tkMessageBox
-import numpy as np
+
+#import numpy as np
 
 from PIL import ImageTk, Image
-from pyhdf.SD import SD, SDC
+#from pyhdf.SD import SD, SDC
 
 import parameters as params
 
 
 class MainWindow(object):
+    
     """
         non-importable class for ui-building
         run as main program
@@ -48,9 +51,9 @@ class MainWindow(object):
         self.canvas = None
         self.e1, self.e2, self.e3, self.e4 = None, None, None, None
         self.e5, self.e6, self.e7, self.e8 = None, None, None, None
-        self.mouse_state = tk.IntVar()      # self.mouse_state.get() ==0    # drag mouse to move image
-                                            # self.mouse_state.get() ==1    # click to set starting point
-                                            # self.mouse_state.get() ==2    # click to set ending point
+        self.mouse_status = tk.IntVar()     # self.mouse_status.get() ==0    # drag mouse to move image
+                                            # self.mouse_status.get() ==1    # click to set starting point
+                                            # self.mouse_status.get() ==2    # click to set ending point
             
         # now building ui
 
@@ -84,9 +87,9 @@ class MainWindow(object):
 
 
         # building frame_left_bottom
-        b0 = tk.Radiobutton(frame_left_bottom, text="默认", variable=self.mouse_state,value=0)
-        b1 = tk.Radiobutton(frame_left_bottom, text="设置起点", variable=self.mouse_state ,value=1)
-        b2 = tk.Radiobutton(frame_left_bottom, text="设置终点", variable=self.mouse_state ,value=2)
+        b0 = tk.Radiobutton(frame_left_bottom, text="默认", variable=self.mouse_status,value=0)
+        b1 = tk.Radiobutton(frame_left_bottom, text="设置起点", variable=self.mouse_status ,value=1)
+        b2 = tk.Radiobutton(frame_left_bottom, text="设置终点", variable=self.mouse_status ,value=2)
         b3 = tk.Button(frame_left_bottom, text='更换modis图像', command=self.__callback_b3_change_modis)
         b4 = tk.Button(frame_left_bottom, text='显示/隐藏经纬网', command=self.__callback_b4_showhide_geogrids)
         b5 = tk.Button(frame_left_bottom, text='-', width=2, command=self.__callback_b5_zoomout)
@@ -163,6 +166,11 @@ class MainWindow(object):
         b9.grid(row=11, column=0, columnspan=2, pady=20)
 
 
+        # event bindings
+        self.canvas.bind("<Button-1>", self.__event_canvas_click)
+        self.canvas.bind("<Button-3>", self.__event_canvas_rightclick)
+        self.canvas.bind("<B1-Motion>", self.__event_canvas_move)
+
 
     #######################################
     ### public member functions ###########
@@ -175,14 +183,18 @@ class MainWindow(object):
     #######################################
 
     # button callbacks (with no event paratemer)
+
     def __callback(self):
         pass
+
 
     def __callback_b3_change_modis(self):
         pass
 
+
     def __callback_b4_showhide_geogrids(self):
         pass
+
 
     def __callback_b5_zoomout(self):
         factor = self.zoom_factor
@@ -194,7 +206,6 @@ class MainWindow(object):
         self.__rescale(new_factor)
 
 
-        
     def __callback_b6_zoomin(self):
         factor = self.zoom_factor
         index = self.zoom_level.index(factor)
@@ -204,11 +215,14 @@ class MainWindow(object):
         new_factor = self.zoom_level[index + 1]
         self.__rescale(new_factor)
 
+
     def __callback_b7_genpath(self):
         pass
 
+
     def __callback_b8_querycoordinates(self):
         pass
+
 
     def __callback_b9_reset(self):
         pass
@@ -216,8 +230,42 @@ class MainWindow(object):
 
     # event callbacks
 
-    def __event_callback(self, event):
+    def __event_canvas_click(self, event):
+
+        canvas = event.widget
+        x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+
+        x_position_canvas = float(x) / self.imtk.width()   # x is horizontal, y is vertical
+        y_position_canvas = float(y) / self.imtk.height()  # this is quite different from matrix[x, y]
+
+        status = self.mouse_status.get()
+
+        if status == 0:     # normal
+            canvas.scan_mark(event.x, event.y)
+        
+        elif status == 1:   # click to set starting point
+            print x, y
+
+        elif status == 2:   # click to set ending point
+            pass
+
+        else:
+            raise Exception('mouse status error')
+
+
+    def __event_canvas_rightclick(self, event):
         pass
+
+
+    def __event_canvas_move(self, event):
+
+        canvas = event.widget
+
+        if self.mouse_status.get() == 0:     # normal
+            canvas.scan_dragto(event.x, event.y, gain=1)
+
+
+
 
     #######################################
     ### auxiliary functions ###############
