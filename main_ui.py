@@ -38,12 +38,12 @@ class MainWindow(object):
         # all member variables are listed below
 
         # pathes and model
-        self.imagefile = 'data/MOD02QKM.A2014005.2110.006.2014218155544_band1.jpg'
-        self.probfile = ''
+        self.imagefile = 'data/MOD02QKM.A2014005.2110.006.2014218155544_band1.tif'
+        self.probfile = self.imagefile[0:-4] + '.txt'
         self.model = None
 
         self.zoom_factor= 1.0
-        self.zoom_level = [0.1, 0.2, 0.5, 0.75, 1.0] 
+        self.zoom_level = [0.1, 0.2, 0.5, 0.75, 1.0] # final static variable
 
         # member var for ui
         self.imtk = None
@@ -51,7 +51,11 @@ class MainWindow(object):
         self.canvas = None
         self.e1, self.e2, self.e3, self.e4 = None, None, None, None
         self.e5, self.e6, self.e7, self.e8 = None, None, None, None
-        self.mouse_status = tk.IntVar()     # self.mouse_status.get() ==0    # drag mouse to move image
+
+        # ui widget control variable
+        self.optimize_target = tk.StringVar()   # control var of self.e6 (optionmenu), domain{'', '时间' '油耗', '路程'}
+        self.mouse_status = tk.IntVar()         # control var of b0, b1 and b2 (radiobutton group), domain{1, 2, 3}
+                                            # self.mouse_status.get() ==0    # drag mouse to move image
                                             # self.mouse_status.get() ==1    # click to set starting point
                                             # self.mouse_status.get() ==2    # click to set ending point
             
@@ -87,9 +91,9 @@ class MainWindow(object):
 
 
         # building frame_left_bottom
-        b0 = tk.Radiobutton(frame_left_bottom, text="默认", variable=self.mouse_status,value=0)
-        b1 = tk.Radiobutton(frame_left_bottom, text="设置起点", variable=self.mouse_status ,value=1)
-        b2 = tk.Radiobutton(frame_left_bottom, text="设置终点", variable=self.mouse_status ,value=2)
+        b0 = tk.Radiobutton(frame_left_bottom, text="默认", variable=self.mouse_status, value=0)
+        b1 = tk.Radiobutton(frame_left_bottom, text="设置起点", variable=self.mouse_status, value=1)
+        b2 = tk.Radiobutton(frame_left_bottom, text="设置终点", variable=self.mouse_status, value=2)
         b3 = tk.Button(frame_left_bottom, text='更换modis图像', command=self.__callback_b3_change_modis)
         b4 = tk.Button(frame_left_bottom, text='显示/隐藏经纬网', command=self.__callback_b4_showhide_geogrids)
         b5 = tk.Button(frame_left_bottom, text='-', width=2, command=self.__callback_b5_zoomout)
@@ -139,8 +143,7 @@ class MainWindow(object):
         
 
         option_list = ['时间', '油耗', '路程']
-        v = tk.StringVar(frame_right, option_list[0])
-        self.e6 = tk.OptionMenu(frame_right, v, *option_list)
+        self.e6 = tk.OptionMenu(frame_right, self.optimize_target, *option_list)
         self.e6.config(width=6)
         self.e6.grid(row=5, column=1)
 
@@ -172,15 +175,15 @@ class MainWindow(object):
         self.canvas.bind("<B1-Motion>", self.__event_canvas_move)
 
 
-    #######################################
-    ### public member functions ###########
-    #######################################
+    ################################################################################
+    ### public member functions ####################################################
+    ################################################################################
 
     '''no public member func for this class'''
 
-    #######################################
-    ### callback functions ################
-    #######################################
+    ################################################################################
+    ### callback functions #########################################################
+    ################################################################################
 
     # button callbacks (with no event paratemer)
 
@@ -189,7 +192,31 @@ class MainWindow(object):
 
 
     def __callback_b3_change_modis(self):
-        pass
+        
+        from tkFileDialog import askopenfilename
+        
+        options = {}
+        options['initialdir'] = 'data'
+        options['filetypes'] = [('tiff files', '.tif')]
+        filename = askopenfilename(**options)
+
+        if filename == '':  #cancl
+            return  
+
+        imagefile = 'data/' + filename.split('/')[-1]
+        probfile = imagefile[0:-4] + '.txt'
+
+        #todo: check probfile exist
+
+        if imagefile == self.imagefile: # same file
+            return
+
+        self.imagefile = imagefile
+        self.probfile = probfile
+        self.model = None
+
+        self.__callback_b9_reset()
+        self.__rescale(1.0)
 
 
     def __callback_b4_showhide_geogrids(self):
@@ -225,7 +252,15 @@ class MainWindow(object):
 
 
     def __callback_b9_reset(self):
-        pass
+        
+        for e in [self.e1, self.e2, self.e3, self.e4, self.e5, self.e7, self.e8]:
+            e.delete(0, 'end')
+
+        self.optimize_target.set('')
+        self.mouse_status.set(0)
+
+        self.canvas.delete("all")
+        self.canvas.create_image(0, 0, image=self.imtk, anchor='nw')
 
 
     # event callbacks
@@ -267,9 +302,9 @@ class MainWindow(object):
 
 
 
-    #######################################
-    ### auxiliary functions ###############
-    #######################################
+    ################################################################################
+    ### auxiliary functions ########################################################
+    ################################################################################
 
     def __rescale(self, new_factor):
         self.zoom_factor = new_factor
