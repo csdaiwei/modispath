@@ -6,10 +6,8 @@ import tkMessageBox
 import Tkinter as tk
 from Tkinter import *
 
-#import numpy as np
 
 from PIL import ImageTk, Image
-#from pyhdf.SD import SD, SDC
 
 import parameters as params
 
@@ -43,7 +41,9 @@ class MainWindow(object):
         self.model = None
 
         self.zoom_factor= 1.0
-        self.zoom_level = [0.1, 0.2, 0.5, 0.75, 1.0] # final static variable
+        self.zoom_level = [0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0]    # final static
+
+        self.img = Image.open(self.imagefile)
 
         # member var for ui
         self.imtk = None
@@ -63,16 +63,15 @@ class MainWindow(object):
 
         # first of all, 3 main frames
         frame_left_top = tk.Frame(master, width=850, height=850)
-        frame_left_bottom = tk.Frame(master, width=850, height=60)
-        frame_right = tk.Frame(master, width=200, height=910)
+        frame_left_bottom = tk.Frame(master, width=850, height=50)
+        frame_right = tk.Frame(master, width=200, height=900)
         frame_left_top.grid(row=0, column=0, padx=2, pady=2)
         frame_left_bottom.grid(row=1, column=0)
         frame_right.grid(row=0, column=1, rowspan=2, padx=1, pady=2)
 
         # building frame_left_top
-        img = Image.open(self.imagefile)
-        self.imtk = ImageTk.PhotoImage(img)
-        canvas = tk.Canvas(frame_left_top, width=850, height=850, bg='yellow')
+        self.imtk = ImageTk.PhotoImage(self.img)
+        canvas = tk.Canvas(frame_left_top, width=850, height=850, bg='grey')
         canvas.create_image(0, 0, image=self.imtk, anchor='nw')
 
         xbar = tk.Scrollbar(frame_left_top, orient=HORIZONTAL)
@@ -82,12 +81,13 @@ class MainWindow(object):
         ybar = tk.Scrollbar(frame_left_top)
         ybar.config(command=canvas.yview)
         ybar.pack(side=RIGHT, fill=Y)
-
+        
         canvas.config(scrollregion=canvas.bbox(ALL))
         canvas.config(xscrollcommand=xbar.set)
         canvas.config(yscrollcommand=ybar.set)
-        self.canvas = canvas
         canvas.pack()
+
+        self.canvas = canvas
 
 
         # building frame_left_bottom
@@ -168,11 +168,12 @@ class MainWindow(object):
         b8.grid(row=10, column=0, columnspan=2, pady=20)
         b9.grid(row=11, column=0, columnspan=2, pady=20)
 
+        # ui widget code ends 
 
         # event bindings
-        self.canvas.bind("<Button-1>", self.__event_canvas_click)
-        self.canvas.bind("<Button-3>", self.__event_canvas_rightclick)
-        self.canvas.bind("<B1-Motion>", self.__event_canvas_move)
+        canvas.bind("<Button-1>", self.__event_canvas_click)
+        canvas.bind("<Button-3>", self.__event_canvas_rightclick)
+        canvas.bind("<B1-Motion>", self.__event_canvas_move)
 
 
     ################################################################################
@@ -187,8 +188,10 @@ class MainWindow(object):
 
     # button callbacks (with no event paratemer)
 
+    '''
     def __callback(self):
         pass
+    '''
 
 
     def __callback_b3_change_modis(self):
@@ -212,6 +215,7 @@ class MainWindow(object):
             return
 
         self.imagefile = imagefile
+        self.img = Image.open(self.imagefile)
         self.probfile = probfile
         self.model = None
 
@@ -268,7 +272,7 @@ class MainWindow(object):
     def __event_canvas_click(self, event):
 
         canvas = event.widget
-        x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+        x, y = canvas.canvasx(event.x), canvas.canvasy(event.y)
 
         x_position_canvas = float(x) / self.imtk.width()   # x is horizontal, y is vertical
         y_position_canvas = float(y) / self.imtk.height()  # this is quite different from matrix[x, y]
@@ -279,7 +283,7 @@ class MainWindow(object):
             canvas.scan_mark(event.x, event.y)
         
         elif status == 1:   # click to set starting point
-            print x, y
+            pass
 
         elif status == 2:   # click to set ending point
             pass
@@ -307,17 +311,26 @@ class MainWindow(object):
     ################################################################################
 
     def __rescale(self, new_factor):
+
+        # save scrollbar position before rescaling
+        xa, xb = self.canvas.xview()
+        ya, yb = self.canvas.yview()
+
+        # do rescaling works
         self.zoom_factor = new_factor
         self.zoom_text.set('%d' % (new_factor * 100) + '%')
 
-        img = Image.open(self.imagefile)
-        new_size = (int(img.size[0] * new_factor), int(img.size[1] * new_factor))
-        self.imtk = ImageTk.PhotoImage(img.resize(new_size, Image.ANTIALIAS))
+        new_size = (int(self.img.size[0] * new_factor), int(self.img.size[1] * new_factor))
+        self.imtk = ImageTk.PhotoImage(self.img.resize(new_size))          # self.img is not resized
         self.canvas.create_image(0, 0, image=self.imtk, anchor='nw')
         self.canvas.config(scrollregion=(0, 0, new_size[0], new_size[1]))
 
-        
-        
+        #todo: draw other things
+
+        # fix wrong position of scrollbar after rescaling
+        self.canvas.xview_moveto(xa)
+        self.canvas.yview_moveto(ya)
+
 
 if __name__ == '__main__':
     root = tk.Tk()
