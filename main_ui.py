@@ -19,7 +19,7 @@ from PIL import ImageTk, Image
 #       start/end point color pot
 #       right click to show mat values
 
-# 1. 缩放中心调整
+# 1. 缩放中心调整 ok
 # 2. 经纬网重新绘制
 # 3. 路径危险程度绘制
 
@@ -500,15 +500,14 @@ class MainWindow(object):
         ilen, jlen = lat_mat.shape
 
         vset = set([])
-        for i in range(1, ilen-1):      # for each row i, find a point j that lon_mat[i, j] == lon 
+        for i in range(1, ilen-1):      # for each row i, find all j that (lon_mat[i, j] - lon) <= 0.01
             lon = lon_mat[i, :]
-            j = np.fabs(lon - longitude).argmin()
-            diff = np.fabs(lon[j] - longitude)
-            if diff < 0.1:
-                vset.add((i, j))
+            for j in (np.fabs(lon - longitude) < 0.01).nonzero()[0].tolist():
+                vset.add((i, int(j)))
         
         if len(vset) == 0:
             # not found, raise error
+            print 'target lon %s, lat %s'%(longitude, latitude)
             raise ValueError('longitude not found, vset 0')
 
         vlist = list(vset)
@@ -517,7 +516,8 @@ class MainWindow(object):
         diff =  np.fabs(lat[t] - latitude)
         
         if diff > 0.1:
-            raise ValueError('longitude not found, vset 0')
+            print 'target lon %s, lat %s'%(longitude, latitude)
+            raise ValueError('latitude not found')
 
         i, j = vlist[t]
         return int(i), int(j)
@@ -533,14 +533,19 @@ class MainWindow(object):
         lat_mat = self.lonlat_mat[:, :, 1]
         ilen, jlen = lat_mat.shape
 
+        width = 2
+        if self.zoom_factor <= 0.6:
+            width = 1.5
+        if self.zoom_factor <= 0.2:
+            width = 1
+
         #todo : generate v from range of lon_mat/lat_mat
 
+        '''
         # draw latitude lines
         for v in [-80, -70, -60, -50]:
             line_points = []
-            for j in range(0, jlen):
-                if j%10 != 0:
-                    continue
+            for j in range(0, jlen, 10):
                 lat = lat_mat[:, j]
                 i = int(np.fabs(lat - v).argmin())
                 diff = np.fabs(lat[i] - v)
@@ -557,9 +562,7 @@ class MainWindow(object):
         # draw longitude lines
         for v in [-160, 180, 160, 140, 120, 100]:
             line_points = []
-            for i in range(0, ilen):
-                if i%10 !=0:
-                    continue
+            for i in range(0, ilen, 10):
                 lon = lon_mat[i, :]
                 j = int(np.fabs(lon - v).argmin())
                 diff = np.fabs(lon[j] - v)
@@ -572,6 +575,43 @@ class MainWindow(object):
                 nx, ny = self.__matrixcoor2canvascoor(line_points[i+1][0], line_points[i+1][1])
 
                 g = self.canvas.create_line(cx, cy, nx, ny, fill='yellow', width=1.5)
+                self.tag_geogrids.append(g)
+        '''
+        # draw longitude lines
+        for v in [110]:       # cannot draw longitude 180 line by this way since it is fully vertical
+            line_points = []
+            for i in range(0, ilen, 10):
+                lon = lon_mat[i, :]
+                j = int(np.fabs(lon - v).argmin())
+                diff = np.fabs(lon[j] - v)
+                if j > 0 and j < jlen-1 and diff < 0.1:
+                    if lat_mat[i, j] > -81: # do not draw longitude lines within -80
+                        line_points.append((i, j))
+
+            if len(line_points) < 5:
+                continue
+
+            indice = np.random.randint(0, len(line_points), size=5)
+            line_points = [line_points[ind] for ind in indice]
+            
+            X = [p[0] for p in line_points]
+            Y = [p[1] for p in line_points]
+            line = np.poly1d(np.polyfit(X, Y, 1))   # line fit
+
+            line_points = []
+            for i in range(0, ilen):
+                v = line(i)
+                j = int(v)
+                diff = np.fabs(v - j)
+                if j > 0 and j < jlen-1 and diff < 0.1:
+                    if lat_mat[i, j] >= -80:
+                        line_points.append((i, j))
+
+            for i in range(0, len(line_points)-1):
+                cx, cy = self.__matrixcoor2canvascoor(line_points[i][0], line_points[i][1])
+                nx, ny = self.__matrixcoor2canvascoor(line_points[i+1][0], line_points[i+1][1])
+
+                g = self.canvas.create_line(cx, cy, nx, ny, fill='yellow', width=width)
                 self.tag_geogrids.append(g)
 
 
