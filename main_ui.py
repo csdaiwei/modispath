@@ -3,12 +3,19 @@
 import pdb
 
 import pickle
-
 import tkMessageBox
+
+import numpy as np
 import Tkinter as tk
 from Tkinter import *
 
 from PIL import ImageTk, Image
+
+# todo: on entry start/end input
+#       input check
+#       multi route
+#       partial route
+#       diagrams
 
 
 class MainWindow(object):
@@ -47,11 +54,6 @@ class MainWindow(object):
 
         self.__init_models('data/CURRENT_RASTER_1000.jpg')
 
-        # zoom related
-        self.zoom_factor= 1.0
-        self.zoom_level = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]    # final static
-
-
         # member var for ui
         self.imtk = None
         self.zoom_text = None
@@ -59,12 +61,19 @@ class MainWindow(object):
         self.e1, self.e2, self.e3, self.e4 = None, None, None, None
         self.e5, self.e6, self.e7, self.e8 = None, None, None, None
 
-        # ui widget control variable
+        # control variables
+        self.zoom_factor= 1.0
+        self.zoom_level = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]    # final static
+        self.show_geogrids = False
         self.optimize_target = tk.StringVar()   # control var of self.e6 (optionmenu), domain{'', '时间' '油耗', '路程'}
         self.mouse_status = tk.IntVar()         # control var of b0, b1 and b2 (radiobutton group), domain{1, 2, 3}
                                             # self.mouse_status.get() ==0    # drag mouse to move image
                                             # self.mouse_status.get() ==1    # click to set starting point
                                             # self.mouse_status.get() ==2    # click to set ending point
+
+        # canvas tags
+        self.tag_geogrids = []
+
             
         # now building ui
 
@@ -227,7 +236,19 @@ class MainWindow(object):
 
 
     def __callback_b4_showhide_geogrids(self):
-        pass
+        
+        if self.show_geogrids:
+            #hide
+            for g in self.tag_geogrids:
+                self.canvas.delete(g)
+            self.tag_geogrids = []
+            self.show_geogrids = False
+        else:
+            #show
+            self.__draw_geogrids()
+            self.show_geogrids = True
+
+
 
 
     def __callback_b5_zoomout(self):
@@ -260,11 +281,14 @@ class MainWindow(object):
 
     def __callback_b9_reset(self):
         
+        # clear entries
         for e in [self.e1, self.e2, self.e3, self.e4, self.e5, self.e7, self.e8]:
             e.delete(0, 'end')
 
+        # reset contron variables
         self.optimize_target.set('')
         self.mouse_status.set(0)
+        self.show_geogrids = False
 
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, image=self.imtk, anchor='nw')
@@ -275,10 +299,10 @@ class MainWindow(object):
     def __event_canvas_click(self, event):
 
         canvas = event.widget
-        x, y = canvas.canvasx(event.x), canvas.canvasy(event.y)
+        x, y = canvas.canvasx(event.x), canvas.canvasy(event.y)     # x y is canvas coordinates
 
-        x_position_canvas = float(x) / self.imtk.width()   # x is horizontal, y is vertical    #todo: imtk.width check 
-        y_position_canvas = float(y) / self.imtk.height()  # this is quite different from matrix[x, y]
+        if x <= 0 or x >= self.imtk.width() or y <= 0 or y >= self.imtk.height():
+            return 
 
         status = self.mouse_status.get()
 
@@ -286,10 +310,26 @@ class MainWindow(object):
             canvas.scan_mark(event.x, event.y)
         
         elif status == 1:   # click to set starting point
-            pass
+            
+            i, j = self.__canvascoor2matrixcoor(x, y)
+            lon = self.lonlat_mat[i, j][0]
+            lat = self.lonlat_mat[i, j][1]
+
+            self.e1.delete(0, 'end')
+            self.e1.insert(0, str('%0.2f'%lon))
+            self.e2.delete(0, 'end')
+            self.e2.insert(0, str('%0.2f'%lat))
+
 
         elif status == 2:   # click to set ending point
-            pass
+            i, j = self.__canvascoor2matrixcoor(x, y)
+            lon = self.lonlat_mat[i, j][0]
+            lat = self.lonlat_mat[i, j][1]
+
+            self.e3.delete(0, 'end')
+            self.e3.insert(0, str('%0.2f'%lon))
+            self.e4.delete(0, 'end')
+            self.e4.insert(0, str('%0.2f'%lat))
 
         else:
             raise Exception('mouse status error')
@@ -331,6 +371,8 @@ class MainWindow(object):
         self.canvas.config(scrollregion=(0, 0, new_size[0], new_size[1]))
 
         #todo: draw other things
+        if self.show_geogrids:
+            self.__draw_geogrids()
 
         # fix wrong position of scrollbar after rescaling
         self.canvas.xview_moveto(xa)
@@ -363,6 +405,72 @@ class MainWindow(object):
         assert self.prob_mat.shape[1] * 5  == self.img.size[0]
 
 
+    def __canvascoor2matrixcoor(self, x, y):
+         
+        alpha = 1 / self.zoom_factor
+        beta = 5   
+
+        i = int((y * alpha) / beta)
+        j = int((x * alpha) / beta)
+
+        return i, j
+
+
+    def __matrixcoor2canvascoor(self, i, j):
+        
+        beta = 5
+
+        x = int(j * beta * self.zoom_factor)
+        y = int(i * beta * self.zoom_factor)
+
+        return x, y
+
+    def __draw_geogrids(self):
+
+        lon_mat = self.lonlat_mat[:, :, 0]
+        lat_mat = self.lonlat_mat[:, :, 1]
+        ilen, jlen = lat_mat.shape
+
+        #todo : generate v from range of lon_mat/lat_mat
+
+        # draw latitude lines
+        for v in [-80, -70, -60, -50]:
+            line_points = []
+            for j in range(0, jlen):
+                if j%10 != 0:
+                    continue
+                lat = lat_mat[:, j]
+                i = np.fabs(lat - v).argmin()
+                diff = np.fabs(lat[i] - v)
+                if i > 0 and i < ilen-1  and diff < 0.1:
+                    line_points.append((i, j))
+
+            for i in range(0, len(line_points)-1):
+                cx, cy = self.__matrixcoor2canvascoor(line_points[i][0], line_points[i][1])
+                nx, ny = self.__matrixcoor2canvascoor(line_points[i+1][0], line_points[i+1][1])
+
+                g = self.canvas.create_line(cx, cy, nx, ny, fill='yellow', width=1.5) 
+                self.tag_geogrids.append(g)
+
+        # draw longitude lines
+        for v in [-160, 180, 160, 140, 120, 100]:
+            line_points = []
+            for i in range(0, ilen):
+                if i%10 !=0:
+                    continue
+                lon = lon_mat[i, :]
+                j = np.fabs(lon - v).argmin()
+                diff  =np.fabs(lon[j] - v)
+                if j > 0 and j < jlen-1 and diff < 0.1:
+                    if lat_mat[i, j] > -81: # do not draw longitude lines within -80
+                        line_points.append((i, j))
+
+            for i in range(0, len(line_points)-1):
+                cx, cy = self.__matrixcoor2canvascoor(line_points[i][0], line_points[i][1])
+                nx, ny = self.__matrixcoor2canvascoor(line_points[i+1][0], line_points[i+1][1])
+
+                g = self.canvas.create_line(cx, cy, nx, ny, fill='yellow', width=1.5)
+                self.tag_geogrids.append(g)
 
 
 
