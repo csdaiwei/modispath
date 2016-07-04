@@ -19,6 +19,10 @@ from PIL import ImageTk, Image
 #       start/end point color pot
 #       right click to show mat values
 
+# 1. 缩放中心调整
+# 2. 经纬网重新绘制
+# 3. 路径危险程度绘制
+
 
 class MainWindow(object):
     
@@ -77,6 +81,9 @@ class MainWindow(object):
         self.tag_geogrids = []
         self.tag_start_point = None
         self.tag_end_point = None
+        self.tag_query_point = None
+        self.tag_rect = None
+        self.tag_infotext = None
 
             
         # now building ui
@@ -294,8 +301,18 @@ class MainWindow(object):
         self.mouse_status.set(0)
         self.show_geogrids = False
 
+        # clear canvas
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, image=self.imtk, anchor='nw')
+
+        # clear canvas tags
+        self.tag_geogrids = []
+        self.tag_start_point = None
+        self.tag_end_point = None
+        self.tag_query_point = None
+        self.tag_rect = None
+        self.tag_infotext = None
+
 
 
     # event callbacks
@@ -344,8 +361,36 @@ class MainWindow(object):
 
 
     def __event_canvas_rightclick(self, event):
-        pass
+        
+        canvas = event.widget
+        x, y = int(canvas.canvasx(event.x)), int(canvas.canvasy(event.y))     # x y is canvas coordinates
 
+        if x <= 0 or x >= self.imtk.width() or y <= 0 or y >= self.imtk.height():
+            return 
+
+        if self.tag_query_point != None:
+            self.canvas.delete(self.tag_query_point)
+            self.canvas.delete(self.tag_rect)
+            self.canvas.delete(self.tag_infotext)
+            self.tag_query_point = self.tag_rect = self.tag_infotext = None
+            return
+
+        i, j = self.__canvascoor2matrixcoor(x, y)
+
+        lon = self.lonlat_mat[i, j][0]
+        lat = self.lonlat_mat[i, j][1]
+        prob = self.prob_mat[i, j]
+
+        x_offset, y_offset = 200, 60
+
+        if event.x >= int(self.canvas['width']) - x_offset:
+            x_offset = -x_offset
+        if event.y >= int(self.canvas['height']) - y_offset:
+            y_offset = -y_offset
+
+        self.tag_query_point = self.canvas.create_oval(x-5, y-5, x+5, y+5, fill='green')
+        self.tag_rect = self.canvas.create_rectangle(x, y, x+x_offset, y+y_offset, outline="grey", fill="grey")
+        self.tag_infotext = None
 
 
     def __event_canvas_move(self, event):
@@ -383,12 +428,20 @@ class MainWindow(object):
         #todo: draw other things
         self.__draw_start_point()
         self.__draw_end_point()
+        self.tag_query_point = self.tag_rect = self.tag_infotext = None
         if self.show_geogrids:
             self.__draw_geogrids()
 
         # fix wrong position of scrollbar after rescaling
-        self.canvas.xview_moveto(xa)
-        self.canvas.yview_moveto(ya)
+        xm = (xa + xb)/2
+        ym = (ya + yb)/2
+        nxlen = float(self.canvas['width']) / new_size[0]
+        nylen = float(self.canvas['height']) / new_size[1]
+        nxa = (xm - nxlen/2)
+        nya = (ym - nylen/2)
+
+        self.canvas.xview_moveto(nxa)
+        self.canvas.yview_moveto(nya)
 
 
 
