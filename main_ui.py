@@ -2,14 +2,13 @@
 
 import pdb
 
+import pickle
+
 import tkMessageBox
 import Tkinter as tk
 from Tkinter import *
 
-
 from PIL import ImageTk, Image
-
-import parameters as params
 
 
 class MainWindow(object):
@@ -36,14 +35,22 @@ class MainWindow(object):
         # all member variables are listed below
 
         # pathes and model
-        self.imagefile = 'data/MOD02QKM.A2014005.2110.006.2014218155544_band1.tif'
-        self.probfile = self.imagefile[0:-4] + '.txt'
+        self.imagefile = None
+        self.probfile = None
+        self.lonlatfile = None
         self.model = None
 
-        self.zoom_factor= 1.0
-        self.zoom_level = [0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0]    # final static
+        # value matrices
+        self.img = None
+        self.prob_mat = None
+        self.lonlat_mat = None
 
-        self.img = Image.open(self.imagefile)
+        self.__init_models('data/CURRENT_RASTER_1000.jpg')
+
+        # zoom related
+        self.zoom_factor= 1.0
+        self.zoom_level = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]    # final static
+
 
         # member var for ui
         self.imtk = None
@@ -200,25 +207,21 @@ class MainWindow(object):
         
         options = {}
         options['initialdir'] = 'data'
-        options['filetypes'] = [('tiff files', '.tif')]
+        options['filetypes'] = [('jpg files', '.jpg')]
         filename = askopenfilename(**options)
 
         if filename == '':  #cancl
             return  
 
         imagefile = 'data/' + filename.split('/')[-1]
-        probfile = imagefile[0:-4] + '.txt'
-
-        #todo: check probfile exist
 
         if imagefile == self.imagefile: # same file
             return
 
-        self.imagefile = imagefile
-        self.img = Image.open(self.imagefile)
-        self.probfile = probfile
-        self.model = None
+        # refresh models
+        self.__init_models(imagefile)
 
+        # refresh ui
         self.__callback_b9_reset()
         self.__rescale(1.0)
 
@@ -274,7 +277,7 @@ class MainWindow(object):
         canvas = event.widget
         x, y = canvas.canvasx(event.x), canvas.canvasy(event.y)
 
-        x_position_canvas = float(x) / self.imtk.width()   # x is horizontal, y is vertical
+        x_position_canvas = float(x) / self.imtk.width()   # x is horizontal, y is vertical    #todo: imtk.width check 
         y_position_canvas = float(y) / self.imtk.height()  # this is quite different from matrix[x, y]
 
         status = self.mouse_status.get()
@@ -296,6 +299,7 @@ class MainWindow(object):
         pass
 
 
+
     def __event_canvas_move(self, event):
 
         canvas = event.widget
@@ -310,6 +314,7 @@ class MainWindow(object):
     ### auxiliary functions ########################################################
     ################################################################################
 
+    # refresh ui according to certain zoom factor
     def __rescale(self, new_factor):
 
         # save scrollbar position before rescaling
@@ -330,6 +335,36 @@ class MainWindow(object):
         # fix wrong position of scrollbar after rescaling
         self.canvas.xview_moveto(xa)
         self.canvas.yview_moveto(ya)
+
+
+
+    # load matrix files and init models
+    def __init_models(self, imagefile):
+
+        self.imagefile = imagefile
+        self.probfile = self.imagefile[0:-4] + '.prob'
+        self.lonlatfile = self.imagefile[0:-4] + '.lonlat'
+
+        #todo : file existence
+
+        fprob = open(self.probfile,'rb')
+        flonlat = open(self.lonlatfile, 'rb')
+
+        self.prob_mat = pickle.load(fprob)
+        self.lonlat_mat = pickle.load(flonlat)
+        
+        self.img = Image.open(imagefile)
+        self.img = self.img.crop((0, 0, (self.img.width/5)*5, (self.img.height/5)*5))# divisible by 5
+
+        self.model = None
+
+        assert self.prob_mat.shape[0:2] == self.lonlat_mat.shape[0:2]
+        assert self.prob_mat.shape[0] * 5  == self.img.size[1]
+        assert self.prob_mat.shape[1] * 5  == self.img.size[0]
+
+
+
+
 
 
 if __name__ == '__main__':
