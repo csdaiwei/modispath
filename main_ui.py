@@ -16,6 +16,8 @@ from PIL import ImageTk, Image
 #       multi route
 #       partial route
 #       diagrams
+#       start/end point color pot
+#       right click to show mat values
 
 
 class MainWindow(object):
@@ -63,7 +65,7 @@ class MainWindow(object):
 
         # control variables
         self.zoom_factor= 1.0
-        self.zoom_level = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]    # final static
+        self.zoom_level = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5]    # final static
         self.show_geogrids = False
         self.optimize_target = tk.StringVar()   # control var of self.e6 (optionmenu), domain{'', '时间' '油耗', '路程'}
         self.mouse_status = tk.IntVar()         # control var of b0, b1 and b2 (radiobutton group), domain{1, 2, 3}
@@ -73,6 +75,8 @@ class MainWindow(object):
 
         # canvas tags
         self.tag_geogrids = []
+        self.tag_start_point = None
+        self.tag_end_point = None
 
             
         # now building ui
@@ -299,7 +303,7 @@ class MainWindow(object):
     def __event_canvas_click(self, event):
 
         canvas = event.widget
-        x, y = canvas.canvasx(event.x), canvas.canvasy(event.y)     # x y is canvas coordinates
+        x, y = int(canvas.canvasx(event.x)), int(canvas.canvasy(event.y))     # x y is canvas coordinates
 
         if x <= 0 or x >= self.imtk.width() or y <= 0 or y >= self.imtk.height():
             return 
@@ -320,6 +324,8 @@ class MainWindow(object):
             self.e2.delete(0, 'end')
             self.e2.insert(0, str('%0.2f'%lat))
 
+            self.__draw_start_point()
+
 
         elif status == 2:   # click to set ending point
             i, j = self.__canvascoor2matrixcoor(x, y)
@@ -330,6 +336,8 @@ class MainWindow(object):
             self.e3.insert(0, str('%0.2f'%lon))
             self.e4.delete(0, 'end')
             self.e4.insert(0, str('%0.2f'%lat))
+
+            self.__draw_end_point()
 
         else:
             raise Exception('mouse status error')
@@ -357,6 +365,8 @@ class MainWindow(object):
     # refresh ui according to certain zoom factor
     def __rescale(self, new_factor):
 
+        assert new_factor in self.zoom_level
+
         # save scrollbar position before rescaling
         xa, xb = self.canvas.xview()
         ya, yb = self.canvas.yview()
@@ -371,6 +381,8 @@ class MainWindow(object):
         self.canvas.config(scrollregion=(0, 0, new_size[0], new_size[1]))
 
         #todo: draw other things
+        self.__draw_start_point()
+        self.__draw_end_point()
         if self.show_geogrids:
             self.__draw_geogrids()
 
@@ -406,26 +418,63 @@ class MainWindow(object):
 
 
     def __canvascoor2matrixcoor(self, x, y):
-         
-        alpha = 1 / self.zoom_factor
-        beta = 5   
+        
+        assert isinstance(x, int) and isinstance(y, int)
+        beta = 5
 
-        i = int((y * alpha) / beta)
-        j = int((x * alpha) / beta)
-
+        i = int((y / self.zoom_factor) / beta)  # int division
+        j = int((x / self.zoom_factor) / beta)
         return i, j
 
 
     def __matrixcoor2canvascoor(self, i, j):
         
+        assert isinstance(i, int) and isinstance(j, int)
         beta = 5
 
         x = int(j * beta * self.zoom_factor)
         y = int(i * beta * self.zoom_factor)
-
         return x, y
 
+    # returns (i, j) that lonlat_mat[i, j] == (longitude, latitude)
+    def __find_geocoordinates(self, longitude, latitude):
+
+        assert isinstance(longitude, float)
+        assert isinstance(latitude, float)
+
+        lon_mat = self.lonlat_mat[:, :, 0]
+        lat_mat = self.lonlat_mat[:, :, 1]
+        ilen, jlen = lat_mat.shape
+
+        vset = set([])
+        for i in range(1, ilen-1):      # for each row i, find a point j that lon_mat[i, j] == lon 
+            lon = lon_mat[i, :]
+            j = np.fabs(lon - longitude).argmin()
+            diff = np.fabs(lon[j] - longitude)
+            if diff < 0.1:
+                vset.add((i, j))
+        
+        if len(vset) == 0:
+            # not found, raise error
+            raise ValueError('longitude not found, vset 0')
+
+        vlist = list(vset)
+        lat = np.array([lat_mat[v[0], v[1]] for v in vlist])
+        t = np.fabs(lat - latitude).argmin()
+        diff =  np.fabs(lat[t] - latitude)
+        
+        if diff > 0.1:
+            raise ValueError('longitude not found, vset 0')
+
+        i, j = vlist[t]
+        return int(i), int(j)
+
+
     def __draw_geogrids(self):
+
+        for g in self.tag_geogrids:
+            self.canvas.delete(g)
+        self.tag_geogrids = []
 
         lon_mat = self.lonlat_mat[:, :, 0]
         lat_mat = self.lonlat_mat[:, :, 1]
@@ -440,7 +489,7 @@ class MainWindow(object):
                 if j%10 != 0:
                     continue
                 lat = lat_mat[:, j]
-                i = np.fabs(lat - v).argmin()
+                i = int(np.fabs(lat - v).argmin())
                 diff = np.fabs(lat[i] - v)
                 if i > 0 and i < ilen-1  and diff < 0.1:
                     line_points.append((i, j))
@@ -459,8 +508,8 @@ class MainWindow(object):
                 if i%10 !=0:
                     continue
                 lon = lon_mat[i, :]
-                j = np.fabs(lon - v).argmin()
-                diff  =np.fabs(lon[j] - v)
+                j = int(np.fabs(lon - v).argmin())
+                diff = np.fabs(lon[j] - v)
                 if j > 0 and j < jlen-1 and diff < 0.1:
                     if lat_mat[i, j] > -81: # do not draw longitude lines within -80
                         line_points.append((i, j))
@@ -472,6 +521,42 @@ class MainWindow(object):
                 g = self.canvas.create_line(cx, cy, nx, ny, fill='yellow', width=1.5)
                 self.tag_geogrids.append(g)
 
+
+    def __draw_start_point(self):
+        
+        if self.tag_start_point != None:
+            self.canvas.delete(self.tag_start_point)
+            self.tag_start_point = None
+
+        if self.e1.get() == '' or self.e2.get() == '':
+            return
+
+        lon = float(self.e1.get())
+        lat = float(self.e2.get())
+
+        i, j = self.__find_geocoordinates(lon, lat)
+        x, y = self.__matrixcoor2canvascoor(i, j)
+
+        self.tag_start_point = self.canvas.create_oval(x-5, y-5, x+5, y+5, fill='red')
+
+
+
+    def __draw_end_point(self):
+
+        if self.tag_end_point != None:
+            self.canvas.delete(self.tag_end_point)
+            self.tag_end_point = None
+
+        if self.e3.get() == '' or self.e4.get() == '':
+            return
+
+        lon = float(self.e3.get())
+        lat = float(self.e4.get())
+
+        i, j = self.__find_geocoordinates(lon, lat)
+        x, y = self.__matrixcoor2canvascoor(i, j)
+
+        self.tag_end_point = self.canvas.create_oval(x-5, y-5, x+5, y+5, fill='blue')
 
 
 
