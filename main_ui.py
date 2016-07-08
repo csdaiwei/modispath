@@ -10,18 +10,30 @@ import Tkinter as tk
 from Tkinter import *
 
 from PIL import ImageTk, Image
+from collections import Counter
 
-# todo: on entry start/end input
-#       input check
+# todo list 
+#   
+#   to be developed:
+#       callback of entry start/end input      
+#       route generatation
 #       multi route
 #       partial route
-#       diagrams
-#       start/end point color pot
-#       right click to show mat values
+#       cost diagrams
+#       导出功能
+#   
+#   ongoing:
+#       right click to show mat values    
+#
+#
+#   fix or improve:
+#       todo in func MainWindow.__draw_graticule
+#       todo in func MainWindow.__find_geocoordinates
+#       todo in func MainWindiw.__init_models
+#       input check     
+#       缩放中心调整
+#       路径危险程度颜色绘制
 
-# 1. 缩放中心调整 ok
-# 2. 经纬网重新绘制
-# 3. 路径危险程度绘制
 
 
 class MainWindow(object):
@@ -30,12 +42,12 @@ class MainWindow(object):
         non-importable class for ui-building
         run as main program
 
-        On writing new code, make sure your new code is self-consistent
-        and make no side efforts on other codes.
+        On writing new code, make sure the new code is self-consistent
+        and make less side efforts on other codes.
         
         Try not add member variables (self.xxx) since less membervar, less maintenance.
         Try not add public functions, it's a class for main.
-        Do not modify old code unless they are wrong.
+        Do not modify existing code unless it's necessary.
 
         Feel free to add private functions which won't change the internal state (change value of member variables)
         Add it at right place.
@@ -46,6 +58,7 @@ class MainWindow(object):
 
 
         # all member variables are listed below
+        # in fact, all these member variables should be private
 
         # pathes and model
         self.imagefile = None
@@ -70,7 +83,6 @@ class MainWindow(object):
         # control variables
         self.zoom_factor= 1.0
         self.zoom_level = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5]    # final static
-        self.show_geogrids = False
         self.optimize_target = tk.StringVar()   # control var of self.e6 (optionmenu), domain{'', '时间' '油耗', '路程'}
         self.mouse_status = tk.IntVar()         # control var of b0, b1 and b2 (radiobutton group), domain{1, 2, 3}
                                             # self.mouse_status.get() ==0    # drag mouse to move image
@@ -78,7 +90,7 @@ class MainWindow(object):
                                             # self.mouse_status.get() ==2    # click to set ending point
 
         # canvas tags
-        self.tag_geogrids = []
+        self.tag_graticule = []
         self.tag_start_point = None
         self.tag_end_point = None
         self.tag_query_point = None
@@ -122,7 +134,7 @@ class MainWindow(object):
         b1 = tk.Radiobutton(frame_left_bottom, text="设置起点", variable=self.mouse_status, value=1)
         b2 = tk.Radiobutton(frame_left_bottom, text="设置终点", variable=self.mouse_status, value=2)
         b3 = tk.Button(frame_left_bottom, text='更换modis图像', command=self.__callback_b3_change_modis)
-        b4 = tk.Button(frame_left_bottom, text='显示/隐藏经纬网', command=self.__callback_b4_showhide_geogrids)
+        b4 = tk.Button(frame_left_bottom, text='显示/隐藏经纬网', command=self.__callback_b4_showhide_graticule)
         b5 = tk.Button(frame_left_bottom, text='-', width=2, command=self.__callback_b5_zoomout)
         b6 = tk.Button(frame_left_bottom, text='+', width=2, command=self.__callback_b6_zoomin)
         b0.grid(row=0, column=0)
@@ -202,6 +214,8 @@ class MainWindow(object):
         canvas.bind("<Button-3>", self.__event_canvas_rightclick)
         canvas.bind("<B1-Motion>", self.__event_canvas_move)
 
+        self.__rescale(0.2)
+
 
     ################################################################################
     ### public member functions ####################################################
@@ -243,21 +257,19 @@ class MainWindow(object):
 
         # refresh ui
         self.__callback_b9_reset()
-        self.__rescale(1.0)
+        self.__rescale(0.2)
 
 
-    def __callback_b4_showhide_geogrids(self):
+    def __callback_b4_showhide_graticule(self):
         
-        if self.show_geogrids:
+        if self.tag_graticule != []:
             #hide
-            for g in self.tag_geogrids:
+            for g in self.tag_graticule:
                 self.canvas.delete(g)
-            self.tag_geogrids = []
-            self.show_geogrids = False
+            self.tag_graticule = []
         else:
             #show
-            self.__draw_geogrids()
-            self.show_geogrids = True
+            self.__draw_graticule()
 
 
 
@@ -299,14 +311,14 @@ class MainWindow(object):
         # reset contron variables
         self.optimize_target.set('')
         self.mouse_status.set(0)
-        self.show_geogrids = False
+        self.tag_graticule = []
 
         # clear canvas
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, image=self.imtk, anchor='nw')
 
         # clear canvas tags
-        self.tag_geogrids = []
+        self.tag_graticule = []
         self.tag_start_point = None
         self.tag_end_point = None
         self.tag_query_point = None
@@ -429,8 +441,8 @@ class MainWindow(object):
         self.__draw_start_point()
         self.__draw_end_point()
         self.tag_query_point = self.tag_rect = self.tag_infotext = None
-        if self.show_geogrids:
-            self.__draw_geogrids()
+        if self.tag_graticule != []:
+            self.__draw_graticule()
 
         # fix wrong position of scrollbar after rescaling
         xm = (xa + xb)/2
@@ -454,6 +466,8 @@ class MainWindow(object):
 
         #todo : file existence
 
+        beta = 5
+
         fprob = open(self.probfile,'rb')
         flonlat = open(self.lonlatfile, 'rb')
 
@@ -461,35 +475,52 @@ class MainWindow(object):
         self.lonlat_mat = pickle.load(flonlat)
         
         self.img = Image.open(imagefile)
-        self.img = self.img.crop((0, 0, (self.img.width/5)*5, (self.img.height/5)*5))# divisible by 5
+        self.img = self.img.crop((0, 0, (self.img.width/beta)*beta, (self.img.height/beta)*beta))# divisible by beta
 
         self.model = None
 
         assert self.prob_mat.shape[0:2] == self.lonlat_mat.shape[0:2]
-        assert self.prob_mat.shape[0] * 5  == self.img.size[1]
-        assert self.prob_mat.shape[1] * 5  == self.img.size[0]
+        assert self.prob_mat.shape[0] * beta  == self.img.size[1]
+        assert self.prob_mat.shape[1] * beta  == self.img.size[0]
 
 
     def __canvascoor2matrixcoor(self, x, y):
         
-        assert isinstance(x, int) and isinstance(y, int)
+        assert isinstance(x, int) or isinstance(x, long)
+        assert isinstance(y, int) or isinstance(y, long)
+        assert 0 <= x < self.imtk.width()
+        assert 0 <= y < self.imtk.height()
+
         beta = 5
 
         i = int((y / self.zoom_factor) / beta)  # int division
         j = int((x / self.zoom_factor) / beta)
+
+        assert 0 <= i < self.prob_mat.shape[0]
+        assert 0 <= j < self.prob_mat.shape[1]
+
         return i, j
 
 
     def __matrixcoor2canvascoor(self, i, j):
-        
-        assert isinstance(i, int) and isinstance(j, int)
+
+        assert isinstance(i, int) or isinstance(i, long)
+        assert isinstance(j, int) or isinstance(j, long)
+        assert 0 <= i < self.prob_mat.shape[0]
+        assert 0 <= j < self.prob_mat.shape[1]
+
         beta = 5
 
         x = int(j * beta * self.zoom_factor)
         y = int(i * beta * self.zoom_factor)
+
+        #assert 0 <= x < self.imtk.width()
+        #assert 0 <= y < self.imtk.height()
+
         return x, y
 
     # returns (i, j) that lonlat_mat[i, j] == (longitude, latitude)
+    # this func is suspected tp have a precision problem, leave a todo here.
     def __find_geocoordinates(self, longitude, latitude):
 
         assert isinstance(longitude, float)
@@ -501,8 +532,7 @@ class MainWindow(object):
 
         vset = set([])
         for i in range(1, ilen-1):      # for each row i, find all j that (lon_mat[i, j] - lon) <= 0.01
-            lon = lon_mat[i, :]
-            for j in (np.fabs(lon - longitude) < 0.01).nonzero()[0].tolist():
+            for j in (np.fabs(lon_mat[i, :] - longitude) < 0.01).nonzero()[0].tolist():
                 vset.add((i, int(j)))
         
         if len(vset) == 0:
@@ -515,7 +545,7 @@ class MainWindow(object):
         t = np.fabs(lat - latitude).argmin()
         diff =  np.fabs(lat[t] - latitude)
         
-        if diff > 0.1:
+        if diff > 0.5:          # so that precision of lon is 0.01, but precision of lat is 0.5
             print 'target lon %s, lat %s'%(longitude, latitude)
             raise ValueError('latitude not found')
 
@@ -523,61 +553,141 @@ class MainWindow(object):
         return int(i), int(j)
 
 
-    def __draw_geogrids(self):
+    def __draw_graticule(self):
 
-        for g in self.tag_geogrids:
-            self.canvas.delete(g)
-        self.tag_geogrids = []
+        # According to new data, the modis image is transformed by zenithal projection.
+        # We can assume that longitude is straight line, latitude is circle (this is assured by zenithal projection)
+        # and the polar point should be seated in the image (this is not)
+        # Otherwise, we can use code in old system to draw graticule which can deal with twisted graticule
+
+        # This function cannot deal with situation that polar is not within the image
+        # Todo :
+        #   1. To improve accuracy, use canvas coordinates directly (like drawing latitude) to draw longitude
+        #   2. Deal with sitution that polar is not within the image
+
+        for g in self.tag_graticule:
+            self.canvas.delete(g)   # clear old and draw new
+        self.tag_graticule = []
 
         lon_mat = self.lonlat_mat[:, :, 0]
         lat_mat = self.lonlat_mat[:, :, 1]
         ilen, jlen = lat_mat.shape
 
+        polar = [None, None]  # lat_mat[polar] is 90N or 90S
+
         width = 2
+        fontsize = 11
         if self.zoom_factor <= 0.6:
-            width = 1.5
+            width = 1
+            fontsize = 10
         if self.zoom_factor <= 0.2:
             width = 1
+            fontsize = 9
 
-        #todo : generate v from range of lon_mat/lat_mat
+        # find vertical longitude line 180 or 0
+        j_list = []
+        for i in range(0, ilen, 10):
+            for v in [0, 180]:
+                j = int(np.fabs(lon_mat[i, :] - v).argmin())
+                diff = np.fabs(lon_mat[i, j] - v)
+                if diff < 0.5:
+                    j_list.append(int(j))
+
+        if j_list != []: # founded
+            target_j = Counter(j_list).most_common(1)[0][0] # mode of j_list
+            x1, y1 = self.__matrixcoor2canvascoor(0, target_j)
+            x2, y2 = self.__matrixcoor2canvascoor(ilen-1, target_j)
+            g = self.canvas.create_line(x1, y1, x2, y2, fill='SeaGreen', width=width) 
+            t = self.canvas.create_text(x2-2, y2-1, anchor='se', font=("Purisa",fontsize), fill='SeaGreen', text=str(int(round(lon_mat[ilen-1, target_j]))))
+            self.tag_graticule.append(g)
+            self.tag_graticule.append(t)
+
+            polar[1] = int(target_j)
+
+        # draw other longitude lines, such as 150(-30), 120(-60) etc
+        interv = 15
+        for v in range(0+interv, 180, interv):
+            
+            # draw line v(-180+v)
+            # search by column, for every column j find i that lon[i, j] == v (or -180+v)
+            # draw a line between (i0, j0) and (in, jn)
+            # notice that vertical line cannot be drawn by this way
+
+            i_list, j_list = [], []
+            for j in range(0, jlen, 2):
+                for t in [v, -180+v]:
+                    i = int(np.fabs(lon_mat[:, j] - t).argmin())
+                    diff = np.fabs(lon_mat[i, j] - t)
+                    if diff < 0.5:
+                        i_list.append(i)
+                        j_list.append(j)
+
+            if i_list != []:
+                x1, y1 = self.__matrixcoor2canvascoor(i_list[0], j_list[0])
+                x2, y2 = self.__matrixcoor2canvascoor(i_list[-1], j_list[-1])
+                g = self.canvas.create_line(x1, y1, x2, y2, fill='SeaGreen', width=width) 
+                t = self.canvas.create_text(x2-2, y2-1, anchor='se', font=("Purisa",fontsize), fill='SeaGreen', text=str(int(round(lon_mat[i_list[-1], j_list[-1]]))))
+                self.tag_graticule.append(g)
+                self.tag_graticule.append(t)
+
+                if v == 90:
+                    polar[0] = int(i_list[0])   # 90 longitude line is totally horizontal
+
+        assert polar[0] != None and polar[1] != None
+        assert 0 < polar[0] < ilen          
+        assert 0 < polar[1] < jlen
+        
+        # draw latitude circles
+        # notice that all latitude circles center at polar
+        # so once found the center and radius, then the circle can be drawn 
+        interv = 10
+        for v in range(0, 90, interv):
+            
+            t = v if lat_mat[0, 0] > 0 else -v 
+
+            # find a point (i, j) on the circle that lat_mat[i, j] = t
+            i = polar[0]
+            j = int(np.fabs(lat_mat[i, :] - t).argmin())    # first, try to find (i, j) that i equals polar[0]
+            if np.fabs(lat_mat[i, j] - t) > 0.5:            # if not found, try (i, j) that j equals ploar[1]
+                j = polar[1]
+                i = int(np.fabs(lat_mat[:, j] - t).argmin())
+                if np.fabs(lat_mat[i, j] - t) > 0.5:
+                    continue    # also not found , no more work to draw this latitude circle
+            
+            # from now on, use canvas coordinates instead of matrix coordinates to improve accuracy
+            x0, y0 = self.__matrixcoor2canvascoor(polar[0], polar[1])   # canvas coordinates of the center
+            x1, y1 = self.__matrixcoor2canvascoor(i, j)                 # canvas coordinates of (i, j)
+            radius = ((x1-x0)**2 + (y1-y0)**2)**0.5
+
+            xlen, ylen = self.imtk.width(), self.imtk.height()
+
+            for sign in [1, -1]: # lower half circle and upper half circle
+                circle_points = [[]]
+                for x in range(max(int(x0-radius), 0), min(int(x0+radius+1), xlen)):
+                    y = y0 + sign * (radius**2 - (x-x0)**2)**0.5
+                    if 0<= y < ylen:
+                        circle_points[-1].append((x, y))
+                    else:
+                        if circle_points[-1] != []:
+                            circle_points.append([])
+                        else:
+                            continue
+            
+                for points in circle_points:
+
+                    for i in range(0, len(points)-1):
+                        cx, cy = points[i]
+                        nx, ny = points[i+1]
+                        g = self.canvas.create_line(cx, cy, nx, ny, fill='SeaGreen', width=width) 
+                        self.tag_graticule.append(g)
+                        # how about text?
+
+        # for reference, 
+        # code of drawing longitude lines in a line-fitting way 
+        # is preserved here as multi-line comments.
 
         '''
-        # draw latitude lines
-        for v in [-80, -70, -60, -50]:
-            line_points = []
-            for j in range(0, jlen, 10):
-                lat = lat_mat[:, j]
-                i = int(np.fabs(lat - v).argmin())
-                diff = np.fabs(lat[i] - v)
-                if i > 0 and i < ilen-1  and diff < 0.1:
-                    line_points.append((i, j))
-
-            for i in range(0, len(line_points)-1):
-                cx, cy = self.__matrixcoor2canvascoor(line_points[i][0], line_points[i][1])
-                nx, ny = self.__matrixcoor2canvascoor(line_points[i+1][0], line_points[i+1][1])
-
-                g = self.canvas.create_line(cx, cy, nx, ny, fill='yellow', width=1.5) 
-                self.tag_geogrids.append(g)
-
-        # draw longitude lines
-        for v in [-160, 180, 160, 140, 120, 100]:
-            line_points = []
-            for i in range(0, ilen, 10):
-                lon = lon_mat[i, :]
-                j = int(np.fabs(lon - v).argmin())
-                diff = np.fabs(lon[j] - v)
-                if j > 0 and j < jlen-1 and diff < 0.1:
-                    if lat_mat[i, j] > -81: # do not draw longitude lines within -80
-                        line_points.append((i, j))
-
-            for i in range(0, len(line_points)-1):
-                cx, cy = self.__matrixcoor2canvascoor(line_points[i][0], line_points[i][1])
-                nx, ny = self.__matrixcoor2canvascoor(line_points[i+1][0], line_points[i+1][1])
-
-                g = self.canvas.create_line(cx, cy, nx, ny, fill='yellow', width=1.5)
-                self.tag_geogrids.append(g)
-        '''
-        # draw longitude lines
+        # draw longitude lines in line fitting way
         for v in [110]:       # cannot draw longitude 180 line by this way since it is fully vertical
             line_points = []
             for i in range(0, ilen, 10):
@@ -612,7 +722,51 @@ class MainWindow(object):
                 nx, ny = self.__matrixcoor2canvascoor(line_points[i+1][0], line_points[i+1][1])
 
                 g = self.canvas.create_line(cx, cy, nx, ny, fill='yellow', width=width)
-                self.tag_geogrids.append(g)
+                self.tag_graticule.append(g)
+
+        '''
+
+
+        # Also, code for drawing any twisted graticule (old way) are preserved, too. 
+
+        '''
+        # draw latitude lines
+        for v in [-80, -70, -60, -50]:
+            line_points = []
+            for j in range(0, jlen, 10):
+                lat = lat_mat[:, j]
+                i = int(np.fabs(lat - v).argmin())
+                diff = np.fabs(lat[i] - v)
+                if i > 0 and i < ilen-1  and diff < 0.1:
+                    line_points.append((i, j))
+
+            for i in range(0, len(line_points)-1):
+                cx, cy = self.__matrixcoor2canvascoor(line_points[i][0], line_points[i][1])
+                nx, ny = self.__matrixcoor2canvascoor(line_points[i+1][0], line_points[i+1][1])
+
+                g = self.canvas.create_line(cx, cy, nx, ny, fill='yellow', width=1.5) 
+                self.tag_graticule.append(g)
+
+        # draw longitude lines
+        for v in [-160, 180, 160, 140, 120, 100]:
+            line_points = []
+            for i in range(0, ilen, 10):
+                lon = lon_mat[i, :]
+                j = int(np.fabs(lon - v).argmin())
+                diff = np.fabs(lon[j] - v)
+                if j > 0 and j < jlen-1 and diff < 0.1:
+                    if lat_mat[i, j] > -81: # do not draw longitude lines within -80
+                        line_points.append((i, j))
+
+            for i in range(0, len(line_points)-1):
+                cx, cy = self.__matrixcoor2canvascoor(line_points[i][0], line_points[i][1])
+                nx, ny = self.__matrixcoor2canvascoor(line_points[i+1][0], line_points[i+1][1])
+
+                g = self.canvas.create_line(cx, cy, nx, ny, fill='yellow', width=1.5)
+                self.tag_graticule.append(g)
+        '''
+
+        
 
 
     def __draw_start_point(self):
@@ -659,5 +813,7 @@ if __name__ == '__main__':
     root.resizable(width=False, height=False)
 
     window = MainWindow(root)
+
+    print dir(window)
 
     root.mainloop()
