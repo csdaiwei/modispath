@@ -23,7 +23,7 @@ from collections import Counter
 #       导出功能
 #   
 #   ongoing:
-#       right click to show mat values    
+#       right click to show mat values      ok 
 #
 #
 #   fix or improve:
@@ -393,7 +393,13 @@ class MainWindow(object):
         lat = self.lonlat_mat[i, j][1]
         prob = self.prob_mat[i, j]
 
-        x_offset, y_offset = 200, 60
+        text_cotent = 'lon: %.2f, lat: %.2f'%(lon, lat) + '\n\n' + \
+            'sea: %.4f'%prob[0] + '\n' + \
+            'thin ice/cloud: %.4f'%prob[1] + '\n' + \
+            'thick ice/cloud: %.4f'%prob[2]
+
+
+        x_offset, y_offset = 210, 90
 
         if event.x >= int(self.canvas['width']) - x_offset:
             x_offset = -x_offset
@@ -402,7 +408,7 @@ class MainWindow(object):
 
         self.tag_query_point = self.canvas.create_oval(x-5, y-5, x+5, y+5, fill='green')
         self.tag_rect = self.canvas.create_rectangle(x, y, x+x_offset, y+y_offset, outline="grey", fill="grey")
-        self.tag_infotext = None
+        self.tag_infotext = self.canvas.create_text( min(x, x+x_offset), min(y, y+y_offset)+45, anchor=W, font=("Purisa", 11), text=text_cotent)
 
 
     def __event_canvas_move(self, event):
@@ -727,7 +733,7 @@ class MainWindow(object):
         '''
 
 
-        # Also, code for drawing any twisted graticule (old way) are preserved, too. 
+        # Code for drawing any twisted graticule (old way) are preserved below, too. 
 
         '''
         # draw latitude lines
