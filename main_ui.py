@@ -3,36 +3,40 @@
 import pdb
 
 import pickle
-import tkMessageBox
-
 import numpy as np
 import Tkinter as tk
-from Tkinter import *
+import tkMessageBox
 
 from PIL import ImageTk, Image
-from collections import Counter
+from collections import Counter     # to get mode of a list
 
 # todo list 
 #   
 #   to be developed:
-#       callback of entry start/end input      
-#       route generatation
 #       multi route
 #       partial route
 #       cost diagrams
 #       导出功能
+#
 #   
 #   ongoing:
-#       right click to show mat values      ok 
-#
+#       route generation
+#    
 #
 #   fix or improve:
 #       todo in func MainWindow.__draw_graticule
 #       todo in func MainWindow.__find_geocoordinates
 #       todo in func MainWindiw.__init_models
-#       input check     
+#       input check  
+#       callback of entry start/end input      
 #       缩放中心调整
 #       路径危险程度颜色绘制
+#
+#
+#   finished:
+#       right click to show probilities
+#       better way in drawing graticules
+#       scale widget auto show/hide   
 
 
 
@@ -77,13 +81,14 @@ class MainWindow(object):
         self.imtk = None
         self.zoom_text = None
         self.canvas = None
-        self.e1, self.e2, self.e3, self.e4 = None, None, None, None
-        self.e5, self.e6, self.e7, self.e8 = None, None, None, None
+        self.sc, self.sct = None, None
+        self.e1, self.e2, self.e3, self.e4, self.e5 = None, None, None, None, None
+        #self.e6, self.e7, self.e8 = None, None, None, None
 
         # control variables
         self.zoom_factor= 1.0
         self.zoom_level = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5]    # final static
-        self.optimize_target = tk.StringVar()   # control var of self.e6 (optionmenu), domain{'', '时间' '油耗', '路程'}
+        self.optimize_target = tk.StringVar()   # control var of om (optionmenu), domain{'', '最短路径', '最少破冰', '综合'}
         self.mouse_status = tk.IntVar()         # control var of b0, b1 and b2 (radiobutton group), domain{1, 2, 3}
                                             # self.mouse_status.get() ==0    # drag mouse to move image
                                             # self.mouse_status.get() ==1    # click to set starting point
@@ -113,15 +118,15 @@ class MainWindow(object):
         canvas = tk.Canvas(frame_left_top, width=850, height=850, bg='grey')
         canvas.create_image(0, 0, image=self.imtk, anchor='nw')
 
-        xbar = tk.Scrollbar(frame_left_top, orient=HORIZONTAL)
+        xbar = tk.Scrollbar(frame_left_top, orient=tk.HORIZONTAL)
         xbar.config(command=canvas.xview)
-        xbar.pack(side=BOTTOM, fill=X)
+        xbar.pack(side=tk.BOTTOM, fill=tk.X)
 
         ybar = tk.Scrollbar(frame_left_top)
         ybar.config(command=canvas.yview)
-        ybar.pack(side=RIGHT, fill=Y)
+        ybar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        canvas.config(scrollregion=canvas.bbox(ALL))
+        canvas.config(scrollregion=canvas.bbox(tk.ALL))
         canvas.config(xscrollcommand=xbar.set)
         canvas.config(yscrollcommand=ybar.set)
         canvas.pack()
@@ -160,15 +165,13 @@ class MainWindow(object):
         l3 = tk.Label(frame_right, text='终点经度')
         l4 = tk.Label(frame_right, text='终点纬度')
         l5 = tk.Label(frame_right, text='最小间距')
-        l6 = tk.Label(frame_right, text='优化目标')
         l1.grid(row=0, column=0, pady=20)
         l2.grid(row=1, column=0, pady=20)
         l3.grid(row=2, column=0, pady=20)
         l4.grid(row=3, column=0, pady=20)
-        l5.grid(row=4, column=0, pady=20)
-        l6.grid(row=5, column=0, pady=20)
+        l5.grid(row=4, column=0, pady=20)  
         
-
+        
         self.e1 = tk.Entry(frame_right, width=10)
         self.e2 = tk.Entry(frame_right, width=10)
         self.e3 = tk.Entry(frame_right, width=10)
@@ -180,32 +183,47 @@ class MainWindow(object):
         self.e4.grid(row=3, column=1)
         self.e5.grid(row=4, column=1)
         
+        blank = tk.Label(frame_right, height=4)     # put a blank between row 4 and 6
+        blank.grid(row=5)
 
-        option_list = ['时间', '油耗', '路程']
-        self.e6 = tk.OptionMenu(frame_right, self.optimize_target, *option_list)
-        self.e6.config(width=6)
-        self.e6.grid(row=5, column=1)
+        l6 = tk.Label(frame_right, text='优化目标')
+        l6.grid(row=6, column=0, pady=20)
+
+        option_list = ['最短路径', '最少破冰', '综合']
+        om = tk.OptionMenu(frame_right, self.optimize_target, *option_list, command=self.__callback_optionchange)   # callback to auto show/hide sc&sct
+        om.config(width=7)
+        om.grid(row=6, column=1)
+
+        self.sc = tk.Scale(frame_right, from_=0, to=1, resolution=0.01, orient=tk.HORIZONTAL)
+        self.sct = tk.Label(frame_right, text='更短路径    更少破冰', font=('Purisa', 9))
+        self.sc.grid(row=7, column=0, columnspan=2)
+        self.sct.grid(row=8, column=0, columnspan=2)
+        self.sc.grid_remove()
+        self.sct.grid_remove()
+
 
         b7 = tk.Button(frame_right, command=self.__callback_b7_genpath, text='生成路径')
-        b7.grid(row=6, column=0, columnspan=2, pady=20)
+        b7.grid(row=9, column=0, columnspan=2, pady=20)
 
         blank = tk.Label(frame_right, height=5)
-        blank.grid(row=7)
+        blank.grid(row=10)
 
-        l7 = tk.Label(frame_right, text='查询经度')
-        l8 = tk.Label(frame_right, text='查询纬度')
-        l7.grid(row=8, column=0, pady=20)
-        l8.grid(row=9, column=0, pady=20)
-        self.e7 = tk.Entry(frame_right, width=10)
-        self.e8 = tk.Entry(frame_right, width=10)
-        self.e7.grid(row=8, column=1)
-        self.e8.grid(row=9, column=1)
+        # row 11-19 is empty here for adding widget in future
 
+        #l7 = tk.Label(frame_right, text='查询经度')
+        #l8 = tk.Label(frame_right, text='查询纬度')
+        #l7.grid(row=20, column=0, pady=20)
+        #l8.grid(row=21, column=0, pady=20)
+        #self.e7 = tk.Entry(frame_right, width=10)
+        #self.e8 = tk.Entry(frame_right, width=10)
+        #self.e7.grid(row=20, column=1)
+        #self.e8.grid(row=21, column=1)
         
-        b8 = tk.Button(frame_right, command=self.__callback_b8_querycoordinates, text='查询')
+        #b8 = tk.Button(frame_right, command=self.__callback_b8_querycoordinates, text='查询')
+        #b8.grid(row=22, column=0, columnspan=2, pady=20)
+
         b9 = tk.Button(frame_right, command=self.__callback_b9_reset, text='复位')
-        b8.grid(row=10, column=0, columnspan=2, pady=20)
-        b9.grid(row=11, column=0, columnspan=2, pady=20)
+        b9.grid(row=23, column=0, columnspan=2, pady=20)
 
         # ui widget code ends 
 
@@ -233,7 +251,6 @@ class MainWindow(object):
     def __callback(self):
         pass
     '''
-
 
     def __callback_b3_change_modis(self):
         
@@ -305,12 +322,15 @@ class MainWindow(object):
     def __callback_b9_reset(self):
         
         # clear entries
-        for e in [self.e1, self.e2, self.e3, self.e4, self.e5, self.e7, self.e8]:
+        for e in [self.e1, self.e2, self.e3, self.e4, self.e5]:
             e.delete(0, 'end')
 
-        # reset contron variables
+        # reset control variables
         self.optimize_target.set('')
         self.mouse_status.set(0)
+        self.sc.set(0)
+        self.sc.grid_remove()
+        self.sct.grid_remove()
         self.tag_graticule = []
 
         # clear canvas
@@ -325,6 +345,16 @@ class MainWindow(object):
         self.tag_rect = None
         self.tag_infotext = None
 
+
+    def __callback_optionchange(self, option):
+
+        if option == '综合':
+            self.sc.grid()
+            self.sct.grid()
+            print self.sc.get()
+        else:
+            self.sc.grid_remove()
+            self.sct.grid_remove()
 
 
     # event callbacks
@@ -526,7 +556,7 @@ class MainWindow(object):
         return x, y
 
     # returns (i, j) that lonlat_mat[i, j] == (longitude, latitude)
-    # this func is suspected tp have a precision problem, leave a todo here.
+    # this func is suspected to have a precision problem, leave a todo here.
     def __find_geocoordinates(self, longitude, latitude):
 
         assert isinstance(longitude, float)
@@ -812,6 +842,10 @@ class MainWindow(object):
         self.tag_end_point = self.canvas.create_oval(x-5, y-5, x+5, y+5, fill='blue')
 
 
+####################################################################################
+### end of class MainWindow ########################################################
+####################################################################################
+
 
 if __name__ == '__main__':
     root = tk.Tk()
@@ -819,7 +853,4 @@ if __name__ == '__main__':
     root.resizable(width=False, height=False)
 
     window = MainWindow(root)
-
-    print dir(window)
-
     root.mainloop()
