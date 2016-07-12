@@ -15,7 +15,6 @@ from getpath import ModisMap        # algorithm model
 # todo list 
 #   
 #   to be developed:
-#       multi route
 #       partial route
 #       cost diagrams
 #       margin
@@ -37,9 +36,10 @@ from getpath import ModisMap        # algorithm model
 #
 #
 #   finished:
-#       right click to show probilities
+#       basic route generation
 #       better way in drawing graticules
-#       scale widget auto show/hide   
+#       scale widget auto show/hide 
+#       resolution fitting  (suitable for height 768-1080)
 
 
 
@@ -69,8 +69,6 @@ class MainWindow(object):
 
         # pathes and model
         self.imagefile = None
-        self.probfile = None
-        self.lonlatfile = None
         self.model = None
 
         # value matrices
@@ -86,9 +84,10 @@ class MainWindow(object):
         self.canvas = None
         self.sc, self.sct = None, None
         self.e1, self.e2, self.e3, self.e4, self.e5 = None, None, None, None, None
-        #self.e6, self.e7, self.e8 = None, None, None, None
+        #self.e6, self.e7, self.e8 = None, None, None
 
         # control variables
+        self.path = []
         self.zoom_factor= 1.0
         self.zoom_level = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5]    # final static
         self.optimize_target = tk.StringVar()   # control var of om (optionmenu), domain{'', '最短路径', '最少破冰', '综合'}
@@ -99,6 +98,7 @@ class MainWindow(object):
 
         # canvas item tags
         self.tag_graticule = []
+        self.tag_path = []
         self.tag_start_point = None
         self.tag_end_point = None
         self.tag_query_point = None
@@ -107,18 +107,24 @@ class MainWindow(object):
 
             
         # now building ui
+        # firstly, determining canvas window size by the system screensize
 
-        # first of all, 3 main frames
-        frame_left_top = tk.Frame(master, width=850, height=850)
-        frame_left_bottom = tk.Frame(master, width=850, height=50)
-        frame_right = tk.Frame(master, width=200, height=900)
+        basic_size = (master.winfo_screenheight() / 100) * 100 - 150
+        basic_size = min(850, max(600, basic_size)) # 600 650 750 850
+
+        print basic_size, master.winfo_screenheight()
+
+        # then, 3 main frames
+        frame_left_top = tk.Frame(master, width=basic_size, height=basic_size)
+        frame_left_bottom = tk.Frame(master, width=basic_size, height=50)
+        frame_right = tk.Frame(master, width=100, height=basic_size+50)
         frame_left_top.grid(row=0, column=0, padx=2, pady=2)
         frame_left_bottom.grid(row=1, column=0)
         frame_right.grid(row=0, column=1, rowspan=2, padx=1, pady=2)
 
         # building frame_left_top
         self.imtk = ImageTk.PhotoImage(self.img)
-        canvas = tk.Canvas(frame_left_top, width=850, height=850, bg='grey')
+        canvas = tk.Canvas(frame_left_top, width=basic_size, height=basic_size, bg='grey')
         canvas.create_image(0, 0, image=self.imtk, anchor='nw')
 
         xbar = tk.Scrollbar(frame_left_top, orient=tk.HORIZONTAL)
@@ -185,8 +191,11 @@ class MainWindow(object):
         self.e3.grid(row=2, column=1)
         self.e4.grid(row=3, column=1)
         self.e5.grid(row=4, column=1)
+
+        l5.grid_remove()
+        self.e5.grid_remove()
         
-        blank = tk.Label(frame_right, height=4)     # put a blank between row 4 and 6
+        blank = tk.Label(frame_right, height=3)     # put a blank between row 4 and 6
         blank.grid(row=5)
 
         l6 = tk.Label(frame_right, text='优化目标')
@@ -208,7 +217,7 @@ class MainWindow(object):
         b7 = tk.Button(frame_right, command=self.__callback_b7_genpath, text='生成路径')
         b7.grid(row=9, column=0, columnspan=2, pady=20)
 
-        blank = tk.Label(frame_right, height=5)
+        blank = tk.Label(frame_right, height=3)
         blank.grid(row=10)
 
         # row 11-19 is empty here for adding widget in future
@@ -323,7 +332,7 @@ class MainWindow(object):
 
         # set ratio according to optimize target
         if target == '':
-            print 'target not specified'    #todo
+            #print 'target not specified'    #todo
             return 
 
         if target == u'最短路径':
@@ -335,7 +344,12 @@ class MainWindow(object):
 
         assert 0 <= ratio <= 1
         cost, path = self.model.getpath(start, end, ratio)
-        print cost
+        #print cost
+
+        self.path = path
+        self.__draw_path()
+
+        self.mouse_status.set(0)
 
 
     def __callback_b9_reset(self):
@@ -350,7 +364,7 @@ class MainWindow(object):
         self.sc.set(0)
         self.sc.grid_remove()
         self.sct.grid_remove()
-        self.tag_graticule = []
+        self.path = []
 
         # clear canvas
         self.canvas.delete("all")
@@ -363,6 +377,7 @@ class MainWindow(object):
         self.tag_query_point = None
         self.tag_rect = None
         self.tag_infotext = None
+        self.tag_path = []
 
 
     def __callback_optionchange(self, option):
@@ -455,8 +470,8 @@ class MainWindow(object):
             y_offset = -y_offset
 
         self.tag_query_point = self.canvas.create_oval(x-5, y-5, x+5, y+5, fill='green')
-        self.tag_rect = self.canvas.create_rectangle(x, y, x+x_offset, y+y_offset, outline="grey", fill="grey")
-        self.tag_infotext = self.canvas.create_text( min(x, x+x_offset), min(y, y+y_offset)+45, anchor=W, font=("Purisa", 11), text=text_cotent)
+        self.tag_rect = self.canvas.create_rectangle(x, y, x+x_offset, y+y_offset, outline="grey", fill="WhiteSmoke")
+        self.tag_infotext = self.canvas.create_text( min(x, x+x_offset), min(y, y+y_offset)+45, anchor='w', font=("Purisa", 11), text=text_cotent)
 
 
     def __event_canvas_move(self, event):
@@ -480,15 +495,15 @@ class MainWindow(object):
     def __init_models(self, imagefile):
 
         self.imagefile = imagefile
-        self.probfile = self.imagefile[0:-4] + '.prob'
-        self.lonlatfile = self.imagefile[0:-4] + '.lonlat'
+        probfile = self.imagefile[0:-4] + '.prob'
+        lonlatfile = self.imagefile[0:-4] + '.lonlat'
 
         #todo : file existence
 
         beta = 5
 
-        fprob = open(self.probfile,'rb')
-        flonlat = open(self.lonlatfile, 'rb')
+        fprob = open(probfile,'rb')
+        flonlat = open(lonlatfile, 'rb')
 
         self.prob_mat = pickle.load(fprob)
         self.lonlat_mat = pickle.load(flonlat)
@@ -560,6 +575,7 @@ class MainWindow(object):
         #todo: draw other things
         self.__draw_start_point()
         self.__draw_end_point()
+        self.__draw_path()
         self.tag_query_point = self.tag_rect = self.tag_infotext = None
         if self.tag_graticule != []:
             self.__draw_graticule()
@@ -808,7 +824,7 @@ class MainWindow(object):
             self.canvas.delete(self.tag_start_point)
             self.tag_start_point = None
 
-        if self.e1.get() == '' or self.e2.get() == '':
+        if self.e1.get() == '' or self.e2.get() == '':  #todo
             return
 
         lon = float(self.e1.get())
@@ -827,7 +843,7 @@ class MainWindow(object):
             self.canvas.delete(self.tag_end_point)
             self.tag_end_point = None
 
-        if self.e3.get() == '' or self.e4.get() == '':
+        if self.e3.get() == '' or self.e4.get() == '':  #todo
             return
 
         lon = float(self.e3.get())
@@ -837,6 +853,29 @@ class MainWindow(object):
         x, y = self.__matrixcoor2canvascoor(i, j)
 
         self.tag_end_point = self.canvas.create_oval(x-5, y-5, x+5, y+5, fill='blue')
+
+
+    def __draw_path(self):
+        
+        if self.tag_path != []:
+            [self.canvas.delete(p) for p in self.tag_path]
+            self.tag_path = []
+
+        if self.path == []:
+            return 
+
+        width = 3
+        if self.zoom_factor <= 0.6:
+            width = 2
+        if self.zoom_factor <= 0.2:
+            width = 1
+
+        for i in range(0, len(self.path)-1):
+            cx, cy = self.__matrixcoor2canvascoor(self.path[i][0], self.path[i][1])
+            nx, ny = self.__matrixcoor2canvascoor(self.path[i+1][0], self.path[i+1][1])
+            tp = self.canvas.create_line(cx, cy, nx, ny, fill='green', width=width)
+            self.tag_path.append(tp)
+        
 
 
 

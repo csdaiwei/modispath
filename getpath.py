@@ -109,17 +109,17 @@ class ModisMap(object):
 
     def __matrixcoor2index(self, i, j):
         
-        #assert isinstance(i, int) or isinstance(i, long)
-        #assert isinstance(j, int) or isinstance(j, long)
-        #assert 0 <= i < self.h
-        #assert 0 <= j < self.w
+        assert isinstance(i, int) or isinstance(i, long)
+        assert isinstance(j, int) or isinstance(j, long)
+        assert 0 <= i < self.h
+        assert 0 <= j < self.w
 
         return i*self.w + j
 
     def __index2matrixcoor(self, index):
 
-        #assert isinstance(index, int) or isinstance(index, long)
-        #assert 0 <= index < self.h*self.w
+        assert isinstance(index, int) or isinstance(index, long)
+        assert 0 <= index < self.h*self.w
         
         i = index/self.w
         j = index%self.w

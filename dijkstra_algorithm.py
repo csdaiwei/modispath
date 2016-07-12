@@ -1,6 +1,5 @@
 from collections import defaultdict
 from heapq import *
-import numpy as np
 
 def dijkstra(edges, f, t):
     g = defaultdict(list)
@@ -21,4 +20,4 @@ def dijkstra(edges, f, t):
                 if v2 not in seen:
                     heappush(q, (cost+c, v2, path))
 
-    return (float("inf"),())
+    return (float("inf"), path)
