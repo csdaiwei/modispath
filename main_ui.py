@@ -10,12 +10,15 @@ import tkMessageBox
 from PIL import ImageTk, Image
 from collections import Counter     # to get mode of a list
 
+from getpath import ModisMap        # algorithm model
+
 # todo list 
 #   
 #   to be developed:
 #       multi route
 #       partial route
 #       cost diagrams
+#       margin
 #       导出功能
 #
 #   
@@ -94,7 +97,7 @@ class MainWindow(object):
                                             # self.mouse_status.get() ==1    # click to set starting point
                                             # self.mouse_status.get() ==2    # click to set ending point
 
-        # canvas tags
+        # canvas item tags
         self.tag_graticule = []
         self.tag_start_point = None
         self.tag_end_point = None
@@ -247,11 +250,6 @@ class MainWindow(object):
 
     # button callbacks (with no event paratemer)
 
-    '''
-    def __callback(self):
-        pass
-    '''
-
     def __callback_b3_change_modis(self):
         
         from tkFileDialog import askopenfilename
@@ -312,11 +310,32 @@ class MainWindow(object):
 
 
     def __callback_b7_genpath(self):
-        pass
+        
+        # todo : input check
+        slon, slat = float(self.e1.get()), float(self.e2.get())
+        elon, elat = float(self.e3.get()), float(self.e4.get())
 
+        start = self.__find_geocoordinates(slon, slat)
+        end = self.__find_geocoordinates(elon, elat)
 
-    def __callback_b8_querycoordinates(self):
-        pass
+        ratio = -1.0    #cost = 0.01 + ratio*p(thick/thin ice/cloud) + (1-ratio)*dist
+        target = self.optimize_target.get()
+
+        # set ratio according to optimize target
+        if target == '':
+            print 'target not specified'    #todo
+            return 
+
+        if target == u'最短路径':
+            ratio = 0.0
+        elif target == u'最少破冰':
+            ratio = 1.0
+        elif target == u'综合':
+            ratio = float(self.sc.get())    #todo
+
+        assert 0 <= ratio <= 1
+        cost, path = self.model.getpath(start, end, ratio)
+        print cost
 
 
     def __callback_b9_reset(self):
@@ -351,7 +370,6 @@ class MainWindow(object):
         if option == '综合':
             self.sc.grid()
             self.sct.grid()
-            print self.sc.get()
         else:
             self.sc.grid_remove()
             self.sct.grid_remove()
@@ -455,6 +473,72 @@ class MainWindow(object):
     ### auxiliary functions ########################################################
     ################################################################################
 
+
+    ### model related ############################################################
+
+    # load matrix files and init models
+    def __init_models(self, imagefile):
+
+        self.imagefile = imagefile
+        self.probfile = self.imagefile[0:-4] + '.prob'
+        self.lonlatfile = self.imagefile[0:-4] + '.lonlat'
+
+        #todo : file existence
+
+        beta = 5
+
+        fprob = open(self.probfile,'rb')
+        flonlat = open(self.lonlatfile, 'rb')
+
+        self.prob_mat = pickle.load(fprob)
+        self.lonlat_mat = pickle.load(flonlat)
+        
+        self.img = Image.open(imagefile)
+        self.img = self.img.crop((0, 0, (self.img.width/beta)*beta, (self.img.height/beta)*beta))# divisible by beta
+
+        self.model = ModisMap(self.prob_mat)
+
+        assert self.prob_mat.shape[0:2] == self.lonlat_mat.shape[0:2]
+        assert self.prob_mat.shape[0] * beta  == self.img.size[1]
+        assert self.prob_mat.shape[1] * beta  == self.img.size[0]
+
+
+    # returns (i, j) that lonlat_mat[i, j] == (longitude, latitude)
+    # this func is suspected to have a precision problem, leave a todo here.
+    def __find_geocoordinates(self, longitude, latitude):
+
+        assert isinstance(longitude, float)
+        assert isinstance(latitude, float)
+
+        lon_mat = self.lonlat_mat[:, :, 0]
+        lat_mat = self.lonlat_mat[:, :, 1]
+        ilen, jlen = lat_mat.shape
+
+        vset = set([])
+        for i in range(1, ilen-1):      # for each row i, find all j that (lon_mat[i, j] - lon) <= 0.01
+            for j in (np.fabs(lon_mat[i, :] - longitude) < 0.01).nonzero()[0].tolist():
+                vset.add((i, int(j)))
+        
+        if len(vset) == 0:
+            # not found, raise error
+            print 'target lon %s, lat %s'%(longitude, latitude)
+            raise ValueError('longitude not found, vset 0')
+
+        vlist = list(vset)
+        lat = np.array([lat_mat[v[0], v[1]] for v in vlist])
+        t = np.fabs(lat - latitude).argmin()
+        diff =  np.fabs(lat[t] - latitude)
+        
+        if diff > 0.5:          # so that precision of lon is 0.01, but precision of lat is 0.5
+            print 'target lon %s, lat %s'%(longitude, latitude)
+            raise ValueError('latitude not found')
+
+        i, j = vlist[t]
+        return int(i), int(j)
+
+
+    ### drawing related ############################################################
+
     # refresh ui according to certain zoom factor
     def __rescale(self, new_factor):
 
@@ -490,103 +574,6 @@ class MainWindow(object):
 
         self.canvas.xview_moveto(nxa)
         self.canvas.yview_moveto(nya)
-
-
-
-    # load matrix files and init models
-    def __init_models(self, imagefile):
-
-        self.imagefile = imagefile
-        self.probfile = self.imagefile[0:-4] + '.prob'
-        self.lonlatfile = self.imagefile[0:-4] + '.lonlat'
-
-        #todo : file existence
-
-        beta = 5
-
-        fprob = open(self.probfile,'rb')
-        flonlat = open(self.lonlatfile, 'rb')
-
-        self.prob_mat = pickle.load(fprob)
-        self.lonlat_mat = pickle.load(flonlat)
-        
-        self.img = Image.open(imagefile)
-        self.img = self.img.crop((0, 0, (self.img.width/beta)*beta, (self.img.height/beta)*beta))# divisible by beta
-
-        self.model = None
-
-        assert self.prob_mat.shape[0:2] == self.lonlat_mat.shape[0:2]
-        assert self.prob_mat.shape[0] * beta  == self.img.size[1]
-        assert self.prob_mat.shape[1] * beta  == self.img.size[0]
-
-
-    def __canvascoor2matrixcoor(self, x, y):
-        
-        assert isinstance(x, int) or isinstance(x, long)
-        assert isinstance(y, int) or isinstance(y, long)
-        assert 0 <= x < self.imtk.width()
-        assert 0 <= y < self.imtk.height()
-
-        beta = 5
-
-        i = int((y / self.zoom_factor) / beta)  # int division
-        j = int((x / self.zoom_factor) / beta)
-
-        assert 0 <= i < self.prob_mat.shape[0]
-        assert 0 <= j < self.prob_mat.shape[1]
-
-        return i, j
-
-
-    def __matrixcoor2canvascoor(self, i, j):
-
-        assert isinstance(i, int) or isinstance(i, long)
-        assert isinstance(j, int) or isinstance(j, long)
-        assert 0 <= i < self.prob_mat.shape[0]
-        assert 0 <= j < self.prob_mat.shape[1]
-
-        beta = 5
-
-        x = int(j * beta * self.zoom_factor)
-        y = int(i * beta * self.zoom_factor)
-
-        #assert 0 <= x < self.imtk.width()
-        #assert 0 <= y < self.imtk.height()
-
-        return x, y
-
-    # returns (i, j) that lonlat_mat[i, j] == (longitude, latitude)
-    # this func is suspected to have a precision problem, leave a todo here.
-    def __find_geocoordinates(self, longitude, latitude):
-
-        assert isinstance(longitude, float)
-        assert isinstance(latitude, float)
-
-        lon_mat = self.lonlat_mat[:, :, 0]
-        lat_mat = self.lonlat_mat[:, :, 1]
-        ilen, jlen = lat_mat.shape
-
-        vset = set([])
-        for i in range(1, ilen-1):      # for each row i, find all j that (lon_mat[i, j] - lon) <= 0.01
-            for j in (np.fabs(lon_mat[i, :] - longitude) < 0.01).nonzero()[0].tolist():
-                vset.add((i, int(j)))
-        
-        if len(vset) == 0:
-            # not found, raise error
-            print 'target lon %s, lat %s'%(longitude, latitude)
-            raise ValueError('longitude not found, vset 0')
-
-        vlist = list(vset)
-        lat = np.array([lat_mat[v[0], v[1]] for v in vlist])
-        t = np.fabs(lat - latitude).argmin()
-        diff =  np.fabs(lat[t] - latitude)
-        
-        if diff > 0.5:          # so that precision of lon is 0.01, but precision of lat is 0.5
-            print 'target lon %s, lat %s'%(longitude, latitude)
-            raise ValueError('latitude not found')
-
-        i, j = vlist[t]
-        return int(i), int(j)
 
 
     def __draw_graticule(self):
@@ -640,6 +627,10 @@ class MainWindow(object):
 
             polar[1] = int(target_j)
 
+        self.canvas.update_idletasks()
+        from time import sleep
+        sleep(1)
+
         # draw other longitude lines, such as 150(-30), 120(-60) etc
         interv = 15
         for v in range(0+interv, 180, interv):
@@ -672,6 +663,9 @@ class MainWindow(object):
         assert polar[0] != None and polar[1] != None
         assert 0 < polar[0] < ilen          
         assert 0 < polar[1] < jlen
+
+        self.canvas.update_idletasks()
+        sleep(1)
         
         # draw latitude circles
         # notice that all latitude circles center at polar
@@ -695,12 +689,17 @@ class MainWindow(object):
             x1, y1 = self.__matrixcoor2canvascoor(i, j)                 # canvas coordinates of (i, j)
             radius = ((x1-x0)**2 + (y1-y0)**2)**0.5
 
+
+            # the target latitude line is a circle 
+            # the center is (x0, y0), radius is known
+            # by circle formula, we calculate points on the circle and draw it
+
             xlen, ylen = self.imtk.width(), self.imtk.height()
 
             for sign in [1, -1]: # lower half circle and upper half circle
                 circle_points = [[]]
-                for x in range(max(int(x0-radius), 0), min(int(x0+radius+1), xlen)):
-                    y = y0 + sign * (radius**2 - (x-x0)**2)**0.5
+                for x in range(max(int(x0-radius), 0), min(int(x0+radius+1), xlen)):    #range function creates a left-close-right-open interval [,) , thus +1 on right side
+                    y = y0 + sign * (radius**2 - (x-x0)**2)**0.5    # circle formula
                     if 0<= y < ylen:
                         circle_points[-1].append((x, y))
                     else:
@@ -802,8 +801,6 @@ class MainWindow(object):
                 self.tag_graticule.append(g)
         '''
 
-        
-
 
     def __draw_start_point(self):
         
@@ -840,6 +837,45 @@ class MainWindow(object):
         x, y = self.__matrixcoor2canvascoor(i, j)
 
         self.tag_end_point = self.canvas.create_oval(x-5, y-5, x+5, y+5, fill='blue')
+
+
+
+    ### tools ######################################################################
+
+    def __canvascoor2matrixcoor(self, x, y):
+        
+        assert isinstance(x, int) or isinstance(x, long)
+        assert isinstance(y, int) or isinstance(y, long)
+        assert 0 <= x < self.imtk.width()
+        assert 0 <= y < self.imtk.height()
+
+        beta = 5
+
+        i = int((y / self.zoom_factor) / beta)  # int division
+        j = int((x / self.zoom_factor) / beta)
+
+        assert 0 <= i < self.prob_mat.shape[0]
+        assert 0 <= j < self.prob_mat.shape[1]
+
+        return i, j
+
+
+    def __matrixcoor2canvascoor(self, i, j):
+
+        assert isinstance(i, int) or isinstance(i, long)
+        assert isinstance(j, int) or isinstance(j, long)
+        assert 0 <= i < self.prob_mat.shape[0]
+        assert 0 <= j < self.prob_mat.shape[1]
+
+        beta = 5
+
+        x = int(j * beta * self.zoom_factor)
+        y = int(i * beta * self.zoom_factor)
+
+        #assert 0 <= x < self.imtk.width()
+        #assert 0 <= y < self.imtk.height()
+
+        return x, y
 
 
 ####################################################################################
