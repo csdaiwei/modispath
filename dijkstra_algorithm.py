@@ -13,7 +13,9 @@ def dijkstra(edges, f, t):
             seen.add(v1)
             path = (v1, path)
 
-            if v1 == t: return (cost, path)
+            #if v1[0] == t[0] and v1[1] == t[1]: 
+            if v1 == t:
+                return (cost, path)
 
             for c, v2 in g.get(v1, ()):
                 if v2 not in seen:
