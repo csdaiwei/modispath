@@ -63,7 +63,7 @@ class ModisMap(object):
             path_points.append(self.__index2matrixcoor(node))
         
 
-        print 'genedges time: %s'%str(t2-t1)
+        print 'genedges time: %s'%str(t2-t1)    #todo
         print 'dijkstra time: %s'%str(t3-t2)
         print 'total time: %s'%str(t3-t1)
 
@@ -88,22 +88,25 @@ class ModisMap(object):
         j_search_range[0] = min(start[1], end[1]) - 10
         j_search_range[1] = max(start[1], end[1]) + 10
 
-        offset = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]
-        dist = [1, 1, 1, 1, 1.414, 1.414, 1.414, 1.414]
+        offset = [[0, -1], [-1, -1], [-1, 0], [-1, 1]]
+        dist = [1, 1.414, 1, 1.414]
 
         # generate edges in search area 
-        # the cost of (p0-p1) is 0.01 + ratio*p(thick/thin ice/cloud | p1) + (1-ratio)*dist
+        # the cost of (p1-p2) is 0.01 + ratio*(1-p(sea|p2)) + (1-ratio)*dist
         edges = []
-        for index in xrange(0, 8):
+        for index in xrange(0, 4):
+            cost_common = (1.0-ratio)*dist[index] + 0.01
             for i in xrange(i_search_range[0], i_search_range[1]):   # right side +1 ?
                 for j in xrange(j_search_range[0], j_search_range[1]):
                     i2, j2 = i+offset[index][0], j+offset[index][1]
-                    if self.prob_mat[i, j, 0] != np.nan:
-                        if self.prob_mat[i2, j2, 0] != np.nan:
-                            p0_index = i*self.w + j
-                            p1_index = i2*self.w + j2
-                            cost = 0.01 + ratio*(1.0 - self.prob_mat[i2, j2, 0]) + (1.0-ratio)*dist[index]
-                            edges.append((p0_index, p1_index, cost))
+                    if not np.isnan(self.prob_mat[i, j, 0]):
+                        if not np.isnan(self.prob_mat[i2, j2, 0]):
+                            p1_index = i*self.w + j
+                            p2_index = i2*self.w + j2
+                            cost1 = ratio*(1.0 - self.prob_mat[i2, j2, 0]) + cost_common # p1->p2
+                            cost2 = ratio*(1.0 - self.prob_mat[i, j, 0]) + cost_common   # p2->p1
+                            edges.append((p1_index, p2_index, cost1))
+                            edges.append((p2_index, p1_index, cost2))
         return edges
 
 
@@ -135,6 +138,6 @@ if __name__ == '__main__':
     model = ModisMap(prob_mat)
 
     start = (200, 200)
-    end = (800, 800)
+    end = (600, 600)
     ratio = 0.0
     model.getpath(start, end, ratio)

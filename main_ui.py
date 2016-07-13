@@ -18,6 +18,7 @@ from getpath import ModisMap        # algorithm model
 #       partial route
 #       cost diagrams
 #       margin
+#       update modis regularly
 #       导出功能
 #
 #   
@@ -111,8 +112,6 @@ class MainWindow(object):
 
         basic_size = (master.winfo_screenheight() / 100) * 100 - 150
         basic_size = min(850, max(600, basic_size)) # 600 650 750 850
-
-        print basic_size, master.winfo_screenheight()
 
         # then, 3 main frames
         frame_left_top = tk.Frame(master, width=basic_size, height=basic_size)
@@ -344,10 +343,12 @@ class MainWindow(object):
 
         assert 0 <= ratio <= 1
         cost, path = self.model.getpath(start, end, ratio)
-        #print cost
+        
+        print cost  #todo
 
         self.path = path
         self.__draw_path()
+        self.canvas.update_idletasks()
 
         self.mouse_status.set(0)
 
@@ -643,10 +644,6 @@ class MainWindow(object):
 
             polar[1] = int(target_j)
 
-        self.canvas.update_idletasks()
-        from time import sleep
-        sleep(1)
-
         # draw other longitude lines, such as 150(-30), 120(-60) etc
         interv = 15
         for v in range(0+interv, 180, interv):
@@ -680,9 +677,6 @@ class MainWindow(object):
         assert 0 < polar[0] < ilen          
         assert 0 < polar[1] < jlen
 
-        self.canvas.update_idletasks()
-        sleep(1)
-        
         # draw latitude circles
         # notice that all latitude circles center at polar
         # so once found the center and radius, then the circle can be drawn 
