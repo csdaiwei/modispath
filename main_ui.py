@@ -7,6 +7,7 @@ import numpy as np
 import Tkinter as tk
 import tkMessageBox
 
+import matplotlib.pyplot as plt     # draw cost diagram
 from PIL import ImageTk, Image
 from collections import Counter     # to get mode of a list
 
@@ -15,21 +16,19 @@ from getpath import ModisMap        # algorithm model
 # todo list 
 #   
 #   to be developed:
-#       partial route
-#       cost diagrams
-#       margin
 #       update modis regularly
 #       导出功能
 #
 #   
 #   ongoing:
-#       route generation
+#       cost diagrams
 #    
 #
 #   fix or improve:
 #       todo in func MainWindow.__draw_graticule
 #       todo in func MainWindow.__find_geocoordinates
 #       todo in func MainWindiw.__init_models
+#       partial route ?
 #       input check  
 #       callback of entry start/end input      
 #       缩放中心调整
@@ -339,18 +338,20 @@ class MainWindow(object):
         elif target == u'最少破冰':
             ratio = 1.0
         elif target == u'综合':
-            ratio = float(self.sc.get())    #todo
+            ratio = float(self.sc.get())
 
         assert 0 <= ratio <= 1
         cost, path = self.model.getpath(start, end, ratio)
         
-        print cost  #todo
+        print cost  #todo cost == float('inf')
 
         self.path = path
         self.__draw_path()
         self.canvas.update_idletasks()
-
         self.mouse_status.set(0)
+
+        self.__draw_diagram(start, end, path)
+
 
 
     def __callback_b9_reset(self):
@@ -859,7 +860,7 @@ class MainWindow(object):
             return 
 
         width = 3
-        if self.zoom_factor <= 0.6:
+        if self.zoom_factor <= 0.8:
             width = 2
         if self.zoom_factor <= 0.2:
             width = 1
@@ -869,6 +870,35 @@ class MainWindow(object):
             nx, ny = self.__matrixcoor2canvascoor(self.path[i+1][0], self.path[i+1][1])
             tp = self.canvas.create_line(cx, cy, nx, ny, fill='green', width=width)
             self.tag_path.append(tp)
+
+
+    def __draw_diagram(self, start, end, path):
+
+        i_from, i_to = min(start[0], end[0])-10, max(start[0], end[0])+10   #todo model.get_search_area()
+        j_from, j_to = min(start[1], end[1])-10, max(start[1], end[1])+10
+        i_len, j_len = i_to-i_from, j_to-j_from
+
+        value_matrix = self.prob_mat[i_from:i_to, j_from:j_to, 2]     # thick ice/cloud
+
+        path_x_list, path_y_list = [], []
+        for p in path:
+            path_x_list.append(p[1] - j_from)
+            path_y_list.append(i_len-(p[0]-i_from))
+
+        plt.clf()
+        plt.pcolormesh(value_matrix, cmap='seismic', vmin=0, vmax=1)
+        #plt.xlim([0, i_len])
+        #plt.ylim([0, j_len])
+        plt.axis('image')
+        plt.colorbar()
+        plt.plot(path_x_list, path_y_list, color="green", linewidth=3.0)
+        #x_start, y_start = (self.start_position[0]*self.model.h-y_search_area[0], x_len-(self.start_position[1]*self.model.w-x_search_area[0]))
+        #x_end, y_end= (self.end_position[0]*self.model.h-y_search_area[0], x_len-(self.end_position[1]*self.model.w-x_search_area[0]))
+        start_x, start_y = start[1] - j_from, i_len-(start[0]-i_from)
+        end_x, end_y = end[1] - j_from, i_len-(end[0]-i_from)
+        plt.plot(start_x,start_y,'ro',linewidth=10.0)
+        plt.plot(end_x,end_y,'bo',linewidth=10.0)
+        plt.show()
         
 
 

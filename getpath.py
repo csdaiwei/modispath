@@ -51,21 +51,19 @@ class ModisMap(object):
         t2 = datetime.now()
 
         cost, path = dijkstra(edges, start_index, end_index)
-        #cost, path = dijkstra(edges, start, end)
 
         t3 = datetime.now()
 
-        
+
+        print 'genedges time: %s'%str(t2-t1)    #todo
+        print 'dijkstra time: %s'%str(t3-t2)
+        print 'total time: %s'%str(t3-t1)
+
 
         path_points = []
         while path != ():
             node, path = path
             path_points.append(self.__index2matrixcoor(node))
-        
-
-        print 'genedges time: %s'%str(t2-t1)    #todo
-        print 'dijkstra time: %s'%str(t3-t2)
-        print 'total time: %s'%str(t3-t1)
 
         return cost, path_points
 
@@ -92,7 +90,7 @@ class ModisMap(object):
         dist = [1, 1.414, 1, 1.414]
 
         # generate edges in search area 
-        # the cost of (p1-p2) is 0.01 + ratio*(1-p(sea|p2)) + (1-ratio)*dist
+        # the cost of (p1-p2) is 0.01 + ratio*(p(thick|p2)) + (1-ratio)*dist
         edges = []
         for index in xrange(0, 4):
             cost_common = (1.0-ratio)*dist[index] + 0.01
@@ -103,8 +101,8 @@ class ModisMap(object):
                         if not np.isnan(self.prob_mat[i2, j2, 0]):
                             p1_index = i*self.w + j
                             p2_index = i2*self.w + j2
-                            cost1 = ratio*(1.0 - self.prob_mat[i2, j2, 0]) + cost_common # p1->p2
-                            cost2 = ratio*(1.0 - self.prob_mat[i, j, 0]) + cost_common   # p2->p1
+                            cost1 = ratio*(self.prob_mat[i2, j2, 2]) + cost_common # p1->p2
+                            cost2 = ratio*(self.prob_mat[i, j, 2]) + cost_common   # p2->p1
                             edges.append((p1_index, p2_index, cost1))
                             edges.append((p2_index, p1_index, cost2))
         return edges
@@ -128,7 +126,7 @@ class ModisMap(object):
         j = index%self.w
         return i, j
 
-
+# main for test
 
 if __name__ == '__main__':
 
