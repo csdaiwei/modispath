@@ -18,7 +18,6 @@ from getpath import ModisMap        # algorithm model
 #   to be developed:
 #       update modis regularly
 #       路径危险程度颜色绘制
-#       导出功能
 #
 #   
 #   ongoing:
@@ -26,7 +25,9 @@ from getpath import ModisMap        # algorithm model
 #    
 #
 #   fix or improve:
-#       todo in func MainWindow.__draw_graticule
+#       testdrawing
+#       testperformance
+#
 #       todo in func MainWindow.__find_geocoordinates
 #       todo in func MainWindiw.__init_models
 #       
@@ -34,6 +35,7 @@ from getpath import ModisMap        # algorithm model
 #   finished:
 #       basic route generation
 #       cost diagram
+#       right click info
 #       better way in drawing graticules
 #       scale widget auto show/hide 
 #       resolution fitting  (suitable for height 768-1080)
@@ -589,7 +591,7 @@ class MainWindow(object):
         else :
             xm = (xa + xb)/2
             ym = (ya + yb)/2
-            
+
         nxlen = float(self.canvas['width']) / new_size[0]
         nylen = float(self.canvas['height']) / new_size[1]
         nxa = (xm - nxlen/2)
@@ -884,6 +886,7 @@ class MainWindow(object):
         i_len, j_len = i_to-i_from, j_to-j_from
 
         value_matrix = self.prob_mat[i_from:i_to, j_from:j_to, 2]     # thick ice/cloud
+        value_matrix = np.flipud(value_matrix)
 
         path_x_list, path_y_list = [], []
         for p in path:
@@ -892,13 +895,9 @@ class MainWindow(object):
 
         plt.clf()
         plt.pcolormesh(value_matrix, cmap='seismic', vmin=0, vmax=1)
-        #plt.xlim([0, i_len])
-        #plt.ylim([0, j_len])
         plt.axis('image')
         plt.colorbar()
         plt.plot(path_x_list, path_y_list, color="green", linewidth=3.0)
-        #x_start, y_start = (self.start_position[0]*self.model.h-y_search_area[0], x_len-(self.start_position[1]*self.model.w-x_search_area[0]))
-        #x_end, y_end= (self.end_position[0]*self.model.h-y_search_area[0], x_len-(self.end_position[1]*self.model.w-x_search_area[0]))
         start_x, start_y = start[1] - j_from, i_len-(start[0]-i_from)
         end_x, end_y = end[1] - j_from, i_len-(end[0]-i_from)
         plt.plot(start_x,start_y,'ro',linewidth=10.0)
