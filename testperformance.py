@@ -1,5 +1,5 @@
 
-# Dai Wei, csdaiwei@gmail/foxmail.com
+# csdaiwei@gmail/foxmail.com
 #
 # This script contains 2 functions, each of them is supposed
 # to have a bad time-performance, especially the latter one.
@@ -47,7 +47,7 @@ from datetime import datetime
 #   2. compiler theory & common programing skills
 #   3. pythonic, like list comprehension, lambda expression, map/reduce
 #   4. thinking & calculating in matrix, do it with careful memory-using
-#   5. refine by cython
+#   5. refine by cython (not recommended)
 #   6. ...
 #
 # tools:
@@ -97,7 +97,7 @@ cost, path = dijkstra(edges, coor2index(size, 1, 1), coor2index(size, size-2, si
 
 t3 = datetime.now()
 
-        
+
 print 'genedges time: %s'%str(t2-t1)
 print 'dijkstra time: %s'%str(t3-t2)
 print 'total time: %s'%str(t3-t1)

@@ -21,9 +21,6 @@ class MainWindow(object):
     def __init__(self, master):
 
 
-        # all member variables are listed below
-        # in fact, all these member variables should be private
-
         # pathes and model
         self.imagefile = None
 

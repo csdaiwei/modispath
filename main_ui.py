@@ -17,29 +17,27 @@ from getpath import ModisMap        # algorithm model
 #   
 #   to be developed:
 #       update modis regularly
+#       路径危险程度颜色绘制
 #       导出功能
 #
 #   
 #   ongoing:
-#       cost diagrams
+#       callback of entry start/end input  &  input check     
 #    
 #
 #   fix or improve:
 #       todo in func MainWindow.__draw_graticule
 #       todo in func MainWindow.__find_geocoordinates
 #       todo in func MainWindiw.__init_models
-#       partial route ?
-#       input check  
-#       callback of entry start/end input      
-#       缩放中心调整
-#       路径危险程度颜色绘制
-#
+#       
 #
 #   finished:
 #       basic route generation
+#       cost diagram
 #       better way in drawing graticules
 #       scale widget auto show/hide 
 #       resolution fitting  (suitable for height 768-1080)
+#       缩放中心调整
 
 
 
@@ -343,8 +341,6 @@ class MainWindow(object):
         assert 0 <= ratio <= 1
         cost, path = self.model.getpath(start, end, ratio)
         
-        print cost  #todo cost == float('inf')
-
         self.path = path
         self.__draw_path()
         self.canvas.update_idletasks()
@@ -583,8 +579,17 @@ class MainWindow(object):
             self.__draw_graticule()
 
         # fix wrong position of scrollbar after rescaling
-        xm = (xa + xb)/2
-        ym = (ya + yb)/2
+
+        xm, ym = 0.0, 0.0
+        if self.path != []:
+            px1, py1 = self.__matrixcoor2canvascoor(self.path[0][0], self.path[0][1])
+            px2, py2 = self.__matrixcoor2canvascoor(self.path[-1][0], self.path[-1][1])
+            xm = ((px1 + px2) / 2.0) / self.imtk.width()
+            ym = ((py1 + py2) / 2.0) / self.imtk.width()
+        else :
+            xm = (xa + xb)/2
+            ym = (ya + yb)/2
+            
         nxlen = float(self.canvas['width']) / new_size[0]
         nylen = float(self.canvas['height']) / new_size[1]
         nxa = (xm - nxlen/2)
