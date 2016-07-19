@@ -21,7 +21,6 @@ from getpath import ModisMap        # algorithm model
 #
 #   
 #   ongoing:
-#       callback of entry start/end input  &  input check     
 #    
 #
 #   fix or improve:
@@ -39,7 +38,9 @@ from getpath import ModisMap        # algorithm model
 #       better way in drawing graticules
 #       scale widget auto show/hide 
 #       resolution fitting  (suitable for height 768-1080)
+#       callback of entry start/end input  &  input check     
 #       缩放中心调整
+
 
 
 
@@ -196,7 +197,7 @@ class MainWindow(object):
         blank = tk.Label(frame_right, height=3)     # put a blank between row 4 and 6
         blank.grid(row=5)
 
-        l6 = tk.Label(frame_right, text='优化目标')
+        l6 = tk.Label(frame_right, text='考虑因素')
         l6.grid(row=6, column=0, pady=20)
 
         option_list = ['最短路径', '最少破冰', '综合']
@@ -241,6 +242,10 @@ class MainWindow(object):
         canvas.bind("<Button-1>", self.__event_canvas_click)
         canvas.bind("<Button-3>", self.__event_canvas_rightclick)
         canvas.bind("<B1-Motion>", self.__event_canvas_move)
+
+        for e in [self.e1, self.e2, self.e3, self.e4]:
+            e.bind('<FocusOut>', self.__event_entry_input)
+            e.bind('<Return>', self.__event_entry_input)
 
         self.__rescale(0.2)
 
@@ -318,21 +323,17 @@ class MainWindow(object):
 
     def __callback_b7_genpath(self):
         
-        # todo : input check
+        if '' in [self.e1.get(), self.e2.get(), self.e3.get(), self.e4.get(), self.optimize_target.get()]:
+                return
+
         slon, slat = float(self.e1.get()), float(self.e2.get())
-        elon, elat = float(self.e3.get()), float(self.e4.get())
+        elon, elat = float(self.e3.get()), float(self.e4.get())     #RuntimeError 
 
         start = self.__find_geocoordinates(slon, slat)
         end = self.__find_geocoordinates(elon, elat)
 
-        ratio = -1.0    #cost = 0.01 + ratio*p(thick/thin ice/cloud) + (1-ratio)*dist
+        ratio = -1.0    #cost = 0.01 + ratio*p(thick ice/cloud) + (1-ratio)*dist
         target = self.optimize_target.get()
-
-        # set ratio according to optimize target
-        if target == '':
-            #print 'target not specified'    #todo
-            return 
-
         if target == u'最短路径':
             ratio = 0.0
         elif target == u'最少破冰':
@@ -349,9 +350,6 @@ class MainWindow(object):
         self.mouse_status.set(0)
 
         self.__draw_diagram(start, end, path)
-
-
-
     def __callback_b9_reset(self):
         
         # clear entries
@@ -482,6 +480,37 @@ class MainWindow(object):
             canvas.scan_dragto(event.x, event.y, gain=1)
 
 
+    def __event_entry_input(self, event):
+
+        entry = event.widget
+
+        gstart = [self.e1, self.e2]     #g means group
+        gend = [self.e3, self.e4]    
+
+        g = gstart if entry in gstart else gend
+            
+        if g[0].get() == "" or g[1].get() == "":
+            return 
+
+        try:
+            lon = float(g[0].get())
+            lat = float(g[1].get())
+            i, j = self.__find_geocoordinates(lon, lat)
+        
+        except ValueError:
+            entry.delete(0, 'end')
+            tkMessageBox.showerror('Wrong','不是合法的输入')
+
+        except RuntimeError:
+            g[0].delete(0, 'end')
+            g[1].delete(0, 'end')
+            tkMessageBox.showerror('Wrong','经纬度不在范围内')
+
+        # draw anyway even if exception
+        if g == gstart:
+            self.__draw_start_point()
+        else:
+            self.__draw_end_point()
 
 
     ################################################################################
@@ -536,8 +565,8 @@ class MainWindow(object):
         
         if len(vset) == 0:
             # not found, raise error
-            print 'target lon %s, lat %s'%(longitude, latitude)
-            raise ValueError('longitude not found, vset 0')
+            #print 'target lon %s, lat %s'%(longitude, latitude)
+            raise RuntimeError('longitude not found, vset 0')
 
         vlist = list(vset)
         lat = np.array([lat_mat[v[0], v[1]] for v in vlist])
@@ -545,8 +574,8 @@ class MainWindow(object):
         diff =  np.fabs(lat[t] - latitude)
         
         if diff > 0.5:          # so that precision of lon is 0.01, but precision of lat is 0.5
-            print 'target lon %s, lat %s'%(longitude, latitude)
-            raise ValueError('latitude not found')
+            #print 'target lon %s, lat %s'%(longitude, latitude)
+            raise RuntimeError('latitude not found')
 
         i, j = vlist[t]
         return int(i), int(j)
