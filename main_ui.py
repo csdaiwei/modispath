@@ -2,21 +2,29 @@
 
 import pdb
 
+# python native modules
+import os
 import pickle
-import numpy as np
+import threading
 import Tkinter as tk
 import tkMessageBox
 
-import matplotlib.pyplot as plt     # draw cost diagram
-from PIL import ImageTk, Image
+from time import sleep
 from collections import Counter     # to get mode of a list
 
-from getpath import ModisMap        # algorithm model
+# installed packages
+import numpy as np
+import matplotlib.pyplot as plt     # draw cost diagram
+
+from PIL import ImageTk, Image
+
+# hand-written modules of this project
+from getpath import ModisMap
+
 
 # todo list 
 #   
 #   to be developed:
-#       update modis regularly
 #       路径危险程度颜色绘制
 #
 #   
@@ -24,11 +32,10 @@ from getpath import ModisMap        # algorithm model
 #    
 #
 #   fix or improve:
-#       testdrawing
-#       testperformance
+#       testdrawing         # fix bug in __draw_graticule
+#       testperformance     # imporve time performance of route generation 
 #
 #       todo in func MainWindow.__find_geocoordinates
-#       todo in func MainWindiw.__init_models
 #       
 #
 #   finished:
@@ -39,6 +46,7 @@ from getpath import ModisMap        # algorithm model
 #       scale widget auto show/hide 
 #       resolution fitting  (suitable for height 768-1080)
 #       callback of entry start/end input  &  input check     
+#       update modis regularly
 #       缩放中心调整
 
 
@@ -77,7 +85,7 @@ class MainWindow(object):
         self.prob_mat = None
         self.lonlat_mat = None
 
-        self.__init_models('data/CURRENT_RASTER_1000.jpg')
+        self.__init_models('data/0_CURRENT_RASTER_1000.jpg')
 
         # member var for ui
         self.imtk = None
@@ -153,7 +161,7 @@ class MainWindow(object):
         b0.grid(row=0, column=0)
         b1.grid(row=0, column=1)
         b2.grid(row=0, column=2)
-        b3.grid(row=0, column=3)
+        b3.grid(row=0, column=3);   b3.grid_remove()    # no more b3
         b4.grid(row=0, column=4)    # a blank label between column 4 and 6
         b5.grid(row=0, column=6)
         b6.grid(row=0, column=8)    # a scale label between column 6 and 8
@@ -249,6 +257,11 @@ class MainWindow(object):
 
         self.__rescale(0.2)
 
+        # create a thread for refreshing model regularly
+        th = threading.Thread(target=self.__refresh_model_regularly)
+        th.setDaemon(True)
+        th.start()
+
 
     ################################################################################
     ### public member functions ####################################################
@@ -262,7 +275,8 @@ class MainWindow(object):
 
     # button callbacks (with no event paratemer)
 
-    def __callback_b3_change_modis(self):
+
+    def __callback_b3_change_modis(self):           # callback of b3 is abandoned
         
         from tkFileDialog import askopenfilename
         
@@ -280,11 +294,11 @@ class MainWindow(object):
             return
 
         # refresh models
-        self.__init_models(imagefile)
+        isok = self.__init_models(imagefile)
 
         # refresh ui
-        self.__callback_b9_reset()
-        self.__rescale(0.2)
+        if isok:
+            self.__callback_b9_reset()
 
 
     def __callback_b4_showhide_graticule(self):
@@ -324,7 +338,7 @@ class MainWindow(object):
     def __callback_b7_genpath(self):
         
         if '' in [self.e1.get(), self.e2.get(), self.e3.get(), self.e4.get(), self.optimize_target.get()]:
-                return
+            return
 
         slon, slat = float(self.e1.get()), float(self.e2.get())
         elon, elat = float(self.e3.get()), float(self.e4.get())     #RuntimeError 
@@ -350,6 +364,8 @@ class MainWindow(object):
         self.mouse_status.set(0)
 
         self.__draw_diagram(start, end, path)
+
+
     def __callback_b9_reset(self):
         
         # clear entries
@@ -376,6 +392,8 @@ class MainWindow(object):
         self.tag_rect = None
         self.tag_infotext = None
         self.tag_path = []
+
+        self.__rescale(0.2)
 
 
     def __callback_optionchange(self, option):
@@ -527,7 +545,9 @@ class MainWindow(object):
         probfile = self.imagefile[0:-4] + '.prob'
         lonlatfile = self.imagefile[0:-4] + '.lonlat'
 
-        #todo : file existence
+        # file existence
+        if not os.path.isfile(imagefile) or not os.path.isfile(probfile) or not os.path.isfile(lonlatfile):
+            return False
 
         beta = 5
 
@@ -545,6 +565,8 @@ class MainWindow(object):
         assert self.prob_mat.shape[0:2] == self.lonlat_mat.shape[0:2]
         assert self.prob_mat.shape[0] * beta  == self.img.size[1]
         assert self.prob_mat.shape[1] * beta  == self.img.size[0]
+
+        return True
 
 
     # returns (i, j) that lonlat_mat[i, j] == (longitude, latitude)
@@ -611,20 +633,20 @@ class MainWindow(object):
 
         # fix wrong position of scrollbar after rescaling
 
-        xm, ym = 0.0, 0.0
+        xm, ym = 0.0, 0.0   # x middle, y middle
         if self.path != []:
             px1, py1 = self.__matrixcoor2canvascoor(self.path[0][0], self.path[0][1])
             px2, py2 = self.__matrixcoor2canvascoor(self.path[-1][0], self.path[-1][1])
             xm = ((px1 + px2) / 2.0) / self.imtk.width()
             ym = ((py1 + py2) / 2.0) / self.imtk.width()
         else :
-            xm = (xa + xb)/2
-            ym = (ya + yb)/2
+            xm = (xa + xb)/2.0
+            ym = (ya + yb)/2.0
 
-        nxlen = float(self.canvas['width']) / new_size[0]
+        nxlen = float(self.canvas['width']) / new_size[0]       # new xbar len
         nylen = float(self.canvas['height']) / new_size[1]
-        nxa = (xm - nxlen/2)
-        nya = (ym - nylen/2)
+        nxa = (xm - nxlen/2.0)                                  # new xa
+        nya = (ym - nylen/2.0)
 
         self.canvas.xview_moveto(nxa)
         self.canvas.yview_moveto(nya)
@@ -972,6 +994,41 @@ class MainWindow(object):
         #assert 0 <= y < self.imtk.height()
 
         return x, y
+
+
+    ### threading ##################################################################
+
+
+    # this function will run as a daemon thread 
+    def __refresh_model_regularly(self):        
+        
+        datapath = 'data/'
+
+        while 1:
+            sleep(30)
+
+            # refresh model when new data come
+            # new data will have bigger serial number
+
+            fs = os.listdir(datapath)
+            jpgfiles = filter(lambda s: s.endswith('jpg'), fs)
+            serials = map(lambda s: int(s.split('_')[0]), jpgfiles)
+            latestjpgfile = jpgfiles[np.array(serials).argmax()]
+            latestjpgfile = datapath + latestjpgfile
+
+            if latestjpgfile != self.imagefile:
+
+                # refresh models
+                isok = self.__init_models(latestjpgfile)
+
+                # refresh ui
+                if isok:
+                    self.__callback_b9_reset()
+
+
+
+            
+
 
 
 ####################################################################################
