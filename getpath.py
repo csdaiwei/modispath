@@ -44,20 +44,20 @@ class ModisMap(object):
         end_index = self.__matrixcoor2index(end[0], end[1])
         
 
-        t1 = datetime.now()
+        #t1 = datetime.now()
 
         edges = self.__create_edges(start, end, ratio)
 
-        t2 = datetime.now()
+        #t2 = datetime.now()
 
         cost, path = dijkstra(edges, start_index, end_index)
 
-        t3 = datetime.now()
+        #t3 = datetime.now()
 
 
-        print 'genedges time: %s'%str(t2-t1)    #todo
-        print 'dijkstra time: %s'%str(t3-t2)
-        print 'total time: %s'%str(t3-t1)
+        #print 'genedges time: %s'%str(t2-t1)    #todo
+        #print 'dijkstra time: %s'%str(t3-t2)
+        #print 'total time: %s'%str(t3-t1)
 
 
         path_points = []

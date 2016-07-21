@@ -4,12 +4,14 @@ import pdb
 
 # python native modules
 import os
+import sys
 import pickle
 import threading
 import Tkinter as tk
 import tkMessageBox
 
 from time import sleep
+from datetime import datetime
 from collections import Counter     # to get mode of a list
 
 # installed packages
@@ -26,6 +28,7 @@ from getpath import ModisMap
 #   
 #   to be developed:
 #       路径危险程度颜色绘制
+#       use logging instead of printing
 #
 #   
 #   ongoing:
@@ -356,14 +359,34 @@ class MainWindow(object):
             ratio = float(self.sc.get())
 
         assert 0 <= ratio <= 1
+
+        t1 = datetime.now()
+
         cost, path = self.model.getpath(start, end, ratio)
+
+        t2 = datetime.now()
         
         self.path = path
         self.__draw_path()
         self.canvas.update_idletasks()
         self.mouse_status.set(0)
 
+        print "=============================="
+        print '  system:'
+        print '    path generated'
+        print '    '
+        print '    from %s'%(self.e1.get() + ', ' + self.e2.get())
+        print '    to   %s'%(self.e3.get() + ', ' + self.e4.get())
+        print '    '
+        print '    length: %d'%len(path)
+        print '    cost  : %f'%cost
+        print '    time  : %s'%str(t2-t1)
+        print "==============================\n"
+        sys.stdout.flush()
+
         self.__draw_diagram(start, end, path)
+
+        
 
 
     def __callback_b9_reset(self):
@@ -1023,7 +1046,26 @@ class MainWindow(object):
 
                 # refresh ui
                 if isok:
+                    
+                    # save
+                    ee = [self.e1, self.e2, self.e3, self.e4]
+                    ss = [e.get() for e in ee]
+                    
+                    # refresh
                     self.__callback_b9_reset()
+
+                    # load
+                    for e, s in zip(ee, ss):
+                        e.insert(0, s)
+                    self.__draw_start_point()
+                    self.__draw_end_point()
+
+                    print "=============================="
+                    print '  system:'
+                    print '    loaded new modis image'
+                    print "==============================\n"
+                    sys.stdout.flush()
+
 
 
 
