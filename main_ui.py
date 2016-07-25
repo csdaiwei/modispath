@@ -27,7 +27,7 @@ from getpath import ModisMap
 # todo list 
 #   
 #   to be developed:
-#       路径危险程度颜色绘制
+#       draw path color according to rish
 #       use logging instead of printing
 #
 #   
@@ -727,7 +727,7 @@ class MainWindow(object):
             polar[1] = int(target_j)
 
         # draw other longitude lines, such as 150(-30), 120(-60) etc
-        interv = 15
+        interv = 3
         for v in range(0+interv, 180, interv):
             
             # draw line v(-180+v)
@@ -762,7 +762,7 @@ class MainWindow(object):
         # draw latitude circles
         # notice that all latitude circles center at polar
         # so once found the center and radius, then the circle can be drawn 
-        interv = 10
+        interv = 1
         for v in range(0, 90, interv):
             
             t = v if lat_mat[0, 0] > 0 else -v 
@@ -949,7 +949,7 @@ class MainWindow(object):
         for i in range(0, len(self.path)-1):
             cx, cy = self.__matrixcoor2canvascoor(self.path[i][0], self.path[i][1])
             nx, ny = self.__matrixcoor2canvascoor(self.path[i+1][0], self.path[i+1][1])
-            tp = self.canvas.create_line(cx, cy, nx, ny, fill='green', width=width)
+            tp = self.canvas.create_line(cx, cy, nx, ny, fill='#7FFF00', width=width)
             self.tag_path.append(tp)
 
 
@@ -971,7 +971,19 @@ class MainWindow(object):
         plt.pcolormesh(value_matrix, cmap='seismic', vmin=0, vmax=1)
         plt.axis('image')
         plt.colorbar()
-        plt.plot(path_x_list, path_y_list, color="green", linewidth=3.0)
+
+        lonlat_mat = self.lonlat_mat[i_from:i_to, j_from:j_to, :]
+        lonlat_mat = np.flipud(lonlat_mat)
+        xlocs, xlabels = plt.xticks()
+        ylocs, ylabels = plt.yticks()
+        xlocs, ylocs = np.array([int(x) for x in xlocs[0:-1:3]]), np.array([int(x) for x in ylocs[0:-1]])
+        xlabels = ['%.1f'%v for v in lonlat_mat[0, xlocs, 0]]
+        ylabels = ['%.2f'%v for v in lonlat_mat[ylocs, 0, 1]]
+        plt.xticks(xlocs, xlabels)
+        plt.yticks(np.array(ylocs), ylabels)
+
+
+        plt.plot(path_x_list, path_y_list, color="#7FFF00", linewidth=3.0)
         start_x, start_y = start[1] - j_from, i_len-(start[0]-i_from)
         end_x, end_y = end[1] - j_from, i_len-(end[0]-i_from)
         plt.plot(start_x,start_y,'ro',linewidth=10.0)
@@ -1028,7 +1040,6 @@ class MainWindow(object):
         datapath = 'data/'
 
         while 1:
-            sleep(30)
 
             # refresh model when new data come
             # new data will have bigger serial number
@@ -1063,8 +1074,11 @@ class MainWindow(object):
                     print "=============================="
                     print '  system:'
                     print '    loaded new modis image'
+                    print '    '+latestjpgfile
                     print "==============================\n"
                     sys.stdout.flush()
+
+            sleep(30)
 
 
 
