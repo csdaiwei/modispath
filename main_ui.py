@@ -38,7 +38,7 @@ from getpath import ModisMap
 #       testdrawing         # fix bug in __draw_graticule
 #       testperformance     # imporve time performance of route generation 
 #
-#       todo in func MainWindow.__find_geocoordinates
+#       todo in func MainWindow.__find_geocoordinates (refine it as a nearest-neighbour manner)
 #       
 #
 #   finished:
@@ -583,6 +583,9 @@ class MainWindow(object):
         self.img = Image.open(imagefile)
         self.img = self.img.crop((0, 0, (self.img.width/beta)*beta, (self.img.height/beta)*beta))# divisible by beta
 
+        if self.img.size[0] > 6000 or self.img.size[1] > 6000:
+            print 'Warning: current modis image file large than 6000*6000'
+
         self.model = ModisMap(self.prob_mat)
 
         assert self.prob_mat.shape[0:2] == self.lonlat_mat.shape[0:2]
@@ -594,6 +597,7 @@ class MainWindow(object):
 
     # returns (i, j) that lonlat_mat[i, j] == (longitude, latitude)
     # this func is suspected to have a precision problem, leave a todo here.
+    # now it works as a threshold manner, it would be more suitable as a closet-neighbour manner
     def __find_geocoordinates(self, longitude, latitude):
 
         assert isinstance(longitude, float)
@@ -604,13 +608,14 @@ class MainWindow(object):
         ilen, jlen = lat_mat.shape
 
         vset = set([])
-        for i in range(1, ilen-1):      # for each row i, find all j that (lon_mat[i, j] - lon) <= 0.01
-            for j in (np.fabs(lon_mat[i, :] - longitude) < 0.01).nonzero()[0].tolist():
+        for i in range(1, ilen-1):      # for each row i, find all j that (lon_mat[i, j] - lon) <= 0.2
+            for j in (np.fabs(lon_mat[i, :] - longitude) < 0.2).nonzero()[0].tolist():
                 vset.add((i, int(j)))
+
         
         if len(vset) == 0:
             # not found, raise error
-            #print 'target lon %s, lat %s'%(longitude, latitude)
+            print 'longitude not found, target lon %s, lat %s'%(longitude, latitude)
             raise RuntimeError('longitude not found, vset 0')
 
         vlist = list(vset)
@@ -618,8 +623,8 @@ class MainWindow(object):
         t = np.fabs(lat - latitude).argmin()
         diff =  np.fabs(lat[t] - latitude)
         
-        if diff > 0.5:          # so that precision of lon is 0.01, but precision of lat is 0.5
-            #print 'target lon %s, lat %s'%(longitude, latitude)
+        if diff > 0.5:          # so that precision of lon is 0.2, but precision of lat is 0.5
+            print 'latitude not found, target lon %s, lat %s'%(longitude, latitude)
             raise RuntimeError('latitude not found')
 
         i, j = vlist[t]
@@ -646,7 +651,6 @@ class MainWindow(object):
         self.canvas.create_image(0, 0, image=self.imtk, anchor='nw')
         self.canvas.config(scrollregion=(0, 0, new_size[0], new_size[1]))
 
-        #todo: draw other things
         self.__draw_start_point()
         self.__draw_end_point()
         self.__draw_path()
@@ -1076,7 +1080,11 @@ class MainWindow(object):
                     print '    loaded new modis image'
                     print '    '+latestjpgfile
                     print "==============================\n"
-                    sys.stdout.flush()
+
+                else:
+                    print 'lack of data files'
+
+                sys.stdout.flush()
 
             sleep(30)
 
