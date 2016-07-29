@@ -80,11 +80,12 @@ class MainWindow(object):
         # in fact, all these member variables should be private
 
         # pathes and model
-        self.imagefile = None
+        self.modisimgfile = None
         self.model = None
 
         # value matrices
-        self.img = None
+        self.modisimg = None
+        self.costimg = None
         self.prob_mat = None
         self.lonlat_mat = None
 
@@ -100,6 +101,7 @@ class MainWindow(object):
 
         # control variables
         self.path = []
+        self.show_cost = False
         self.zoom_factor= 1.0
         self.zoom_level = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5]    # final static
         self.optimize_target = tk.StringVar()   # control var of om (optionmenu), domain{'', '最短路径', '最少破冰', '综合'}
@@ -133,7 +135,7 @@ class MainWindow(object):
         frame_right.grid(row=0, column=1, rowspan=2, padx=1, pady=2)
 
         # building frame_left_top
-        self.imtk = ImageTk.PhotoImage(self.img)
+        self.imtk = ImageTk.PhotoImage(self.modisimg)
         canvas = tk.Canvas(frame_left_top, width=basic_size, height=basic_size, bg='grey')
         canvas.create_image(0, 0, image=self.imtk, anchor='nw')
 
@@ -157,14 +159,14 @@ class MainWindow(object):
         b0 = tk.Radiobutton(frame_left_bottom, text="默认", variable=self.mouse_status, value=0)
         b1 = tk.Radiobutton(frame_left_bottom, text="设置起点", variable=self.mouse_status, value=1)
         b2 = tk.Radiobutton(frame_left_bottom, text="设置终点", variable=self.mouse_status, value=2)
-        b3 = tk.Button(frame_left_bottom, text='更换modis图像', command=self.__callback_b3_change_modis)
+        b3 = tk.Button(frame_left_bottom, text='显示/隐藏热力图', command=self.__callback_b3_showhide_cost)
         b4 = tk.Button(frame_left_bottom, text='显示/隐藏经纬网', command=self.__callback_b4_showhide_graticule)
         b5 = tk.Button(frame_left_bottom, text='-', width=2, command=self.__callback_b5_zoomout)
         b6 = tk.Button(frame_left_bottom, text='+', width=2, command=self.__callback_b6_zoomin)
         b0.grid(row=0, column=0)
         b1.grid(row=0, column=1)
         b2.grid(row=0, column=2)
-        b3.grid(row=0, column=3);   b3.grid_remove()    # no more b3
+        b3.grid(row=0, column=3)
         b4.grid(row=0, column=4)    # a blank label between column 4 and 6
         b5.grid(row=0, column=6)
         b6.grid(row=0, column=8)    # a scale label between column 6 and 8
@@ -279,30 +281,17 @@ class MainWindow(object):
     # button callbacks (with no event paratemer)
 
 
-    def __callback_b3_change_modis(self):           # callback of b3 is abandoned
+    def __callback_b3_showhide_cost(self):
         
-        from tkFileDialog import askopenfilename
+        if self.show_cost:
+            #hide
+            self.show_cost = False
+            self.__rescale(self.zoom_factor)    # rescale as current zoom factor
+        else:
+            #show
+            self.show_cost = True
+            self.__rescale(self.zoom_factor)
         
-        options = {}
-        options['initialdir'] = 'data'
-        options['filetypes'] = [('jpg files', '.jpg')]
-        filename = askopenfilename(**options)
-
-        if filename == '':  #cancl
-            return  
-
-        imagefile = 'data/' + filename.split('/')[-1]
-
-        if imagefile == self.imagefile: # same file
-            return
-
-        # refresh models
-        isok = self.__init_models(imagefile)
-
-        # refresh ui
-        if isok:
-            self.__callback_b9_reset()
-
 
     def __callback_b4_showhide_graticule(self):
         
@@ -562,15 +551,17 @@ class MainWindow(object):
     ### model related ############################################################
 
     # load matrix files and init models
-    def __init_models(self, imagefile):
+    def __init_models(self, modisimgfile):
 
-        self.imagefile = imagefile
-        probfile = self.imagefile[0:-4] + '.prob'
-        lonlatfile = self.imagefile[0:-4] + '.lonlat'
+        costimgfile = modisimgfile[0:-4] + '.cost'
+        probfile = modisimgfile[0:-4] + '.prob'
+        lonlatfile = modisimgfile[0:-4] + '.lonlat'
 
         # file existence
-        if not os.path.isfile(imagefile) or not os.path.isfile(probfile) or not os.path.isfile(lonlatfile):
+        if not os.path.isfile(modisimgfile) or not os.path.isfile(costimgfile) or not os.path.isfile(probfile) or not os.path.isfile(lonlatfile):
             return False
+
+        self.modisimgfile = modisimgfile
 
         beta = 5
 
@@ -580,17 +571,21 @@ class MainWindow(object):
         self.prob_mat = pickle.load(fprob)
         self.lonlat_mat = pickle.load(flonlat)
         
-        self.img = Image.open(imagefile)
-        self.img = self.img.crop((0, 0, (self.img.width/beta)*beta, (self.img.height/beta)*beta))# divisible by beta
+        self.modisimg = Image.open(modisimgfile)
+        self.modisimg = self.modisimg.crop((0, 0, (self.modisimg.width/beta)*beta, (self.modisimg.height/beta)*beta))   # divisible by beta
 
-        if self.img.size[0] > 6000 or self.img.size[1] > 6000:
+        self.costimg = Image.open(costimgfile)
+        self.costimg = self.costimg.crop((0, 0, (self.costimg.width/beta)*beta, (self.costimg.height/beta)*beta))       # divisible by beta
+
+        if self.modisimg.size[0] > 6000 or self.modisimg.size[1] > 6000:
             print 'Warning: current modis image file large than 6000*6000'
 
         self.model = ModisMap(self.prob_mat)
 
+        assert self.modisimg.size == self.costimg.size
         assert self.prob_mat.shape[0:2] == self.lonlat_mat.shape[0:2]
-        assert self.prob_mat.shape[0] * beta  == self.img.size[1]
-        assert self.prob_mat.shape[1] * beta  == self.img.size[0]
+        assert self.prob_mat.shape[0] * beta  == self.modisimg.size[1]
+        assert self.prob_mat.shape[1] * beta  == self.modisimg.size[0]
 
         return True
 
@@ -646,8 +641,12 @@ class MainWindow(object):
         self.zoom_factor = new_factor
         self.zoom_text.set('%d' % (new_factor * 100) + '%')
 
-        new_size = (int(self.img.size[0] * new_factor), int(self.img.size[1] * new_factor))
-        self.imtk = ImageTk.PhotoImage(self.img.resize(new_size))          # self.img is not resized
+        img = self.modisimg
+        if self.show_cost:
+            img = self.costimg
+
+        new_size = (int(img.size[0] * new_factor), int(img.size[1] * new_factor))
+        self.imtk = ImageTk.PhotoImage(img.resize(new_size))          # img is not resized
         self.canvas.create_image(0, 0, image=self.imtk, anchor='nw')
         self.canvas.config(scrollregion=(0, 0, new_size[0], new_size[1]))
 
@@ -666,6 +665,7 @@ class MainWindow(object):
             px2, py2 = self.__matrixcoor2canvascoor(self.path[-1][0], self.path[-1][1])
             xm = ((px1 + px2) / 2.0) / self.imtk.width()
             ym = ((py1 + py2) / 2.0) / self.imtk.width()
+            print 'hit'
         else :
             xm = (xa + xb)/2.0
             ym = (ya + yb)/2.0
@@ -730,10 +730,13 @@ class MainWindow(object):
 
             polar[1] = int(target_j)
 
+
         # draw other longitude lines, such as 150(-30), 120(-60) etc
         interv = 3
         for v in range(0+interv, 180, interv):
-            
+
+            self.canvas.update_idletasks()
+
             # draw line v(-180+v)
             # search by column, for every column j find i that lon[i, j] == v (or -180+v)
             # draw a line between (i0, j0) and (in, jn)
@@ -758,6 +761,7 @@ class MainWindow(object):
 
                 if v == 90:
                     polar[0] = int(i_list[0])   # 90 longitude line is totally horizontal
+        
 
         assert polar[0] != None and polar[1] != None
         assert 0 < polar[0] < ilen          
@@ -768,7 +772,9 @@ class MainWindow(object):
         # so once found the center and radius, then the circle can be drawn 
         interv = 1
         for v in range(0, 90, interv):
-            
+
+            self.canvas.update_idletasks()
+
             t = v if lat_mat[0, 0] > 0 else -v 
 
             # find a point (i, j) on the circle that lat_mat[i, j] = t
@@ -812,6 +818,7 @@ class MainWindow(object):
                         g = self.canvas.create_line(cx, cy, nx, ny, fill='SeaGreen', width=width) 
                         self.tag_graticule.append(g)
                         # how about text?
+
 
         # for reference, 
         # code of drawing longitude lines in a line-fitting way 
@@ -976,16 +983,17 @@ class MainWindow(object):
         plt.axis('image')
         plt.colorbar()
 
+        '''
         lonlat_mat = self.lonlat_mat[i_from:i_to, j_from:j_to, :]
-        lonlat_mat = np.flipud(lonlat_mat)
+        #lonlat_mat = np.flipud(lonlat_mat)
         xlocs, xlabels = plt.xticks()
         ylocs, ylabels = plt.yticks()
         xlocs, ylocs = np.array([int(x) for x in xlocs[0:-1:3]]), np.array([int(x) for x in ylocs[0:-1]])
-        xlabels = ['%.1f'%v for v in lonlat_mat[0, xlocs, 0]]
-        ylabels = ['%.2f'%v for v in lonlat_mat[ylocs, 0, 1]]
+        xlabels = ['%.1f'%v for v in lonlat_mat[-1, xlocs, 0]]
+        ylabels = ['%.2f'%v for v in lonlat_mat[lonlat_mat.shape[0] - ylocs, 0, 1]]
         plt.xticks(xlocs, xlabels)
-        plt.yticks(np.array(ylocs), ylabels)
-
+        plt.yticks(ylocs, ylabels)
+        '''
 
         plt.plot(path_x_list, path_y_list, color="#7FFF00", linewidth=3.0)
         start_x, start_y = start[1] - j_from, i_len-(start[0]-i_from)
@@ -1054,7 +1062,7 @@ class MainWindow(object):
             latestjpgfile = jpgfiles[np.array(serials).argmax()]
             latestjpgfile = datapath + latestjpgfile
 
-            if latestjpgfile != self.imagefile:
+            if latestjpgfile != self.modisimgfile:
 
                 # refresh models
                 isok = self.__init_models(latestjpgfile)
