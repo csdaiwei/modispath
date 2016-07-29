@@ -664,7 +664,7 @@ class MainWindow(object):
             px1, py1 = self.__matrixcoor2canvascoor(self.path[0][0], self.path[0][1])
             px2, py2 = self.__matrixcoor2canvascoor(self.path[-1][0], self.path[-1][1])
             xm = ((px1 + px2) / 2.0) / self.imtk.width()
-            ym = ((py1 + py2) / 2.0) / self.imtk.width()
+            ym = ((py1 + py2) / 2.0) / self.imtk.height()
             print 'hit'
         else :
             xm = (xa + xb)/2.0
