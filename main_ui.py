@@ -575,7 +575,7 @@ class MainWindow(object):
         self.modisimg = self.modisimg.crop((0, 0, (self.modisimg.width/beta)*beta, (self.modisimg.height/beta)*beta))   # divisible by beta
 
         self.costimg = Image.open(costimgfile)
-        self.costimg = self.costimg.crop((0, 0, (self.costimg.width/beta)*beta, (self.costimg.height/beta)*beta))       # divisible by beta
+        self.costimg = self.costimg.resize((int(self.prob_mat.shape[1] * beta), int(self.prob_mat.shape[0] * beta)))
 
         if self.modisimg.size[0] > 6000 or self.modisimg.size[1] > 6000:
             print 'Warning: current modis image file large than 6000*6000'
