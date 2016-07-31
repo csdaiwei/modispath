@@ -113,6 +113,7 @@ class MainWindow(object):
         # canvas item tags
         self.tag_graticule = []
         self.tag_path = []
+		self.tag_keypoints = []
         self.tag_start_point = None
         self.tag_end_point = None
         self.tag_query_point = None
@@ -163,6 +164,7 @@ class MainWindow(object):
         b4 = tk.Button(frame_left_bottom, text='显示/隐藏经纬网', command=self.__callback_b4_showhide_graticule)
         b5 = tk.Button(frame_left_bottom, text='-', width=2, command=self.__callback_b5_zoomout)
         b6 = tk.Button(frame_left_bottom, text='+', width=2, command=self.__callback_b6_zoomin)
+		b_k = tk.Button(frame_left_bottom, text='显示/隐藏作业点', command=self.__callback_bk_showhide_keypoint)
         b0.grid(row=0, column=0)
         b1.grid(row=0, column=1)
         b2.grid(row=0, column=2)
@@ -170,6 +172,7 @@ class MainWindow(object):
         b4.grid(row=0, column=4)    # a blank label between column 4 and 6
         b5.grid(row=0, column=6)
         b6.grid(row=0, column=8)    # a scale label between column 6 and 8
+		b_k.grid(row=0, column=5)
 
         blank = tk.Label(frame_left_bottom)
         blank.grid(row=0, column=5, padx=40)
@@ -326,6 +329,13 @@ class MainWindow(object):
         new_factor = self.zoom_level[index + 1]
         self.__rescale(new_factor)
 
+	def __callback_bk_showhide_keypoint(self):
+        if self.tag_keypoints != []:       #hide
+            for k in self.tag_keypoints:
+                self.canvas.delete(k)
+            self.tag_keypoints = []
+        else:       #show
+            self.__draw_keypoints()
 
     def __callback_b7_genpath(self):
         
@@ -397,6 +407,7 @@ class MainWindow(object):
         self.canvas.create_image(0, 0, image=self.imtk, anchor='nw')
 
         # clear canvas tags
+		self.tag_keypoints = []
         self.tag_graticule = []
         self.tag_start_point = None
         self.tag_end_point = None
@@ -654,6 +665,10 @@ class MainWindow(object):
         self.__draw_end_point()
         self.__draw_path()
         self.tag_query_point = self.tag_rect = self.tag_infotext = None
+		
+		if self.tag_keypoints != []:
+            self.__draw_keypoints()
+		
         if self.tag_graticule != []:
             self.__draw_graticule()
 
@@ -963,6 +978,20 @@ class MainWindow(object):
             tp = self.canvas.create_line(cx, cy, nx, ny, fill='#7FFF00', width=width)
             self.tag_path.append(tp)
 
+	def __draw_keypoints(self):
+        key_points = [[-169.00, 66.10], [-169.00, 66.52], [-169.00, 67.32], [-169.00, 69.32], [-169.00, 70.20],
+                     [-169.00, 71.11], [-169.00, 71.59], [-180.00, 75.06], [-180.00, 76.00], [-180.00, 77.00], [-180.00, 77.54],
+                     [-180.00, 78.54], [-180.00, 79.54], [-172.00, 64.00], [-169.00, 64.00], [-168.00, 64.00], [-167.00, 64.20],
+                     [-167.48, 64.20], [-168.36, 64.20], [-169.24, 64.20], [-170.12, 64.20], [-171.00, 64.20]]
+        for key in key_points:
+            lon = float(key[0])
+            lat = float(key[1])
+
+            i, j = self.__find_geocoordinates(lon, lat)
+            x, y = self.__matrixcoor2canvascoor(i, j)
+
+            k = self.canvas.create_oval(x-5, y-5, x+5, y+5, fill='yellow')
+            self.tag_keypoints.append(k)
 
     def __draw_diagram(self, start, end, path):
 
